@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8"> 
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LOTR TCG Prototype</title>
+
+    <style>
+        canvas {
+            border: 1px solid black;
+        }
+    </style>
+</head>
+<body>
+    <h1 id="loginGreeting">Welcome to the TestApp </h1>
+    <input id="msg" type="text" placeholder="Enter a Card ID">
+    <button onclick="sendMessage()"> Add Card To Deck</button>
+    <h2>Current Deck List:</h2>
+    <ul id="messages"></ul>
+
+    <script>
+        window.onload = function() {
+            const playerInfo = localStorage.getItem("playerInfo");
+            const heading = document.getElementById("loginGreeting");
+            if (playerInfo) {
+                heading.innerText = "Welcome Back to the LOTR TCG, " + playerInfo;
+            } else {
+                heading.innerText = "Well met, Traveler.";
+            }
+        };
+    </script>
+
+    <input id="playerInfo" type="text" placeholder="What is your player name?">
+    <button onclick="updatePlayerInfo()"> Send</button>
+    <script>
+        function updatePlayerInfo() {
+            const info = document.getElementById('playerInfo').value;
+            console.log("Player entered information ok");
+            socket.emit('playerInfoUpdated', info);
+            localStorage.setItem("playerInfo", info);
+        }
+    </script>
+
+    <h1></h1>
+    <canvas id="gameCanvas" width="1440" height="900"></canvas>
+    <script src="canvas.js"></script>
+
+    <!-- This sends data back to my server. -->
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        socket.on('messageAck', (data) => {
+            const li= document.createElement('li');
+            li.textContent = data;
+            document.getElementById('messages').appendChild(li);
+        });
+
+        function sendMessage() {
+            const msg = document.getElementById('msg').value;
+            socket.emit('message', msg);
+
+            console.log("Sending message across document")
+            document.dispatchEvent(new CustomEvent("cardAdded", { detail: msg }));
+        }
+    </script>
+
+</body>
+</html>
