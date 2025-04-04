@@ -14,9 +14,14 @@ io.on('connection', (socket) => {
     console.log('A user connected:', socket.id);
 
     socket.on('message', (data) => {
-        console.log("Got a message:", data);
+        console.log("Got a message: %s, data:", data, data.details);
         io.emit('messageAck', data);
     });
+
+    socket.on('cardEvent', (data) => {
+        console.log("Got a card Event: %s", data);
+        io.emit('cardEventAck', data);
+    })
 
     socket.on('disconnect', () => {
         console.log('User disconnected:', socket.id);

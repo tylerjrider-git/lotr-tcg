@@ -2,7 +2,7 @@
 <html lang="en">
 
 <head>
-    <meta charset="UTF-8"> 
+    <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LOTR TCG Prototype</title>
 
@@ -12,6 +12,7 @@
         }
     </style>
 </head>
+
 <body>
     <h1 id="loginGreeting">Welcome to the TestApp </h1>
     <input id="msg" type="text" placeholder="Enter a Card ID">
@@ -20,7 +21,7 @@
     <ul id="messages"></ul>
 
     <script>
-        window.onload = function() {
+        window.onload = function () {
             const playerInfo = localStorage.getItem("playerInfo");
             const heading = document.getElementById("loginGreeting");
             if (playerInfo) {
@@ -43,7 +44,7 @@
     </script>
 
     <h1></h1>
-    <canvas id="gameCanvas" width="1440" height="900"></canvas>
+    <canvas id="gameCanvas" width="7680" height="4320"></canvas>
     <script src="canvas.js"></script>
 
     <!-- This sends data back to my server. -->
@@ -51,7 +52,7 @@
     <script>
         const socket = io();
         socket.on('messageAck', (data) => {
-            const li= document.createElement('li');
+            const li = document.createElement('li');
             li.textContent = data;
             document.getElementById('messages').appendChild(li);
         });
@@ -63,7 +64,17 @@
             console.log("Sending message across document")
             document.dispatchEvent(new CustomEvent("cardAdded", { detail: msg }));
         }
+
+        document.addEventListener('cardEvent', (msg) => {
+            console.log("Got a card Movement Event message: %s", msg.detail)
+            socket.emit('cardEvent', msg.detail)
+        })
+        socket.on('cardEventAck', (msg) => {
+            console.log("cardEventAck")
+        })
+
     </script>
 
 </body>
+
 </html>

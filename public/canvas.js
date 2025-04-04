@@ -1,88 +1,175 @@
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
-const gameState = {
-    dragActive: false
-}
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+
 
 // Assets
 backgroundImage = new Image();
 backgroundImage.src = 'assets/background.jpeg'
 const cardLibrary = {
-    "lotr01075": new Image(),
-    "lotr01000": new Image(),
-    "lotrbackground": new Image(),
+    "lotrbackground": new Image()
 }
-cardLibrary["lotr01000"].src = 'assets/Nora.png';
-cardLibrary["lotr01075"].src = 'assets/lotr01075.jpg';
-cardLibrary["lotrbackground"].src = 'assets/Lotrbackground.png'
 
+
+cardLibrary["lotrbackground"].src = 'assets/Lotrbackground.png'
+function getCardImage(cardId) {
+    // Return cached card id.
+    if (cardLibrary[cardId]) {
+        return cardLibrary[cardId];
+    }
+
+    const img = new Image();
+    img.src = `assets/cards/${cardId}.png`;
+    console.log("Loading : %s", img.src)
+    cardLibrary[cardId] = img;
+    return img;
+}
 
 
 // Track mouse position
 let mouseX = 0;
 let mouseY = 0;
 
-const CARD_HEIGHT = 150;
-const CARD_WIDTH = 100;
-const PLAYER_HAND_OFFSET = 50
+const CARD_HEIGHT = 994 / 4;
+const CARD_WIDTH = 714 / 4;
+
+const SITE_CARD_HEIGHT = 714 / 5;
+const SITE_CARD_WIDTH = 994 / 5;
+
+const PLAYER_HAND_OFFSET = 50;
+const CARD_PREVIEW_SHIFT = 20;
+const CARD_PREVIEW_SCALE_FACTOR = 3.0;
 
 // Define the "snap area" (a target area where cards should snap when dropped)
 const playerHand = {
-    x: canvas.width / 4, y: canvas.height - CARD_HEIGHT - 20,
+    x: canvas.width * 0.05, y: canvas.height - CARD_HEIGHT - 30,
     width: canvas.width / 2, height: CARD_HEIGHT
 }
 
 // Define the "snap area" (a target area where cards should snap when dropped)
-const discardPile = {
-    x: canvas.width - CARD_WIDTH - 40, y: canvas.height - CARD_HEIGHT - 20,
+const drawDeck = {
+    x: playerHand.x + playerHand.width + 20, y: canvas.height - CARD_HEIGHT - 30,
     width: CARD_WIDTH, height: CARD_HEIGHT
 }
 
-const drawDeck = {
-    x: discardPile.x - CARD_WIDTH - 10, y: canvas.height - CARD_HEIGHT - 20,
+const discardPile = {
+    x: drawDeck.x + drawDeck.width + 20, y: canvas.height - CARD_HEIGHT - 30,
     width: CARD_WIDTH, height: CARD_HEIGHT
+}
+
+const deadPile = {
+    x: discardPile.x + CARD_WIDTH + 20, y: canvas.height - CARD_HEIGHT - 30,
+    width: CARD_HEIGHT, height: CARD_WIDTH
+}
+
+const siteSlot = {
+    x: 0, y: 0,
+    width: CARD_HEIGHT, height: CARD_WIDTH
+}
+
+const siteSlots = [];
+for (let i = 0; i < 9; i++) {
+    siteSlots.push({
+        x: canvas.width - SITE_CARD_WIDTH - 10, y: canvas.height * 0.025 + ((SITE_CARD_HEIGHT + 5) * i),
+        width: SITE_CARD_WIDTH, height: SITE_CARD_HEIGHT
+    });
 }
 
 // Card object structure, top of cards is "top of stack"
 
-const allCards = [
-
-];
-
-const cardsInPlayerHand = [
-]
+const gameState = {
+    dragActive: false,
+    allCards: [],
+    cardsInPlayerHand: []
+}
 
 const cardsInPlayerDiscard = [
 ]
 
-const cardsInDrawDeck = [
-    { id: "lotr01000", x: drawDeck.x, y: drawDeck.y, z: 0, width: CARD_WIDTH, height: CARD_HEIGHT, isDragged: false, isHover: false },
-    { id: "lotr01075", x: drawDeck.x, y: drawDeck.y, z: 0, width: CARD_WIDTH, height: CARD_HEIGHT, isDragged: false, isHover: false },
-    { id: "lotr01000", x: drawDeck.x, y: drawDeck.y, z: 0, width: CARD_WIDTH, height: CARD_HEIGHT, isDragged: false, isHover: false },
-    { id: "lotr01075", x: drawDeck.x, y: drawDeck.y, z: 0, width: CARD_WIDTH, height: CARD_HEIGHT, isDragged: false, isHover: false },
+const cardsInPlayerDeadPile = [
+
 ]
 
+const cardsInDrawDeck = [
+    { id: "LOTR-EN01001", x: drawDeck.x, y: drawDeck.y, z: 0, width: CARD_WIDTH, height: CARD_HEIGHT, isDragged: false, isHover: false },
+    { id: "LOTR-EN01002", x: drawDeck.x, y: drawDeck.y, z: 0, width: CARD_WIDTH, height: CARD_HEIGHT, isDragged: false, isHover: false },
+    { id: "LOTR-EN01003", x: drawDeck.x, y: drawDeck.y, z: 0, width: CARD_WIDTH, height: CARD_HEIGHT, isDragged: false, isHover: false },
+    { id: "LOTR-EN01004", x: drawDeck.x, y: drawDeck.y, z: 0, width: CARD_WIDTH, height: CARD_HEIGHT, isDragged: false, isHover: false },
+]
+
+function initCard(_id) {
+    return {
+        id: _id,
+        x: drawDeck.x,
+        y: drawDeck.y,
+        z: 0,
+        width: CARD_WIDTH,
+        height: CARD_HEIGHT,
+        isDragged: false,
+        isHover: false
+    }
+}
+
+function initCardDeck() {
+    // Load from starter deck.
+    // E.g. csv.lines.forEach({cardsInDrawDeck.push(initCard(line))})
+    cardsInDrawDeck.push(initCard("LOTR-EN01100"))
+}
+
+initCardDeck()
 
 // ============================================================
 // Card Management, needs events to me sent back to server.
 // ============================================================
+
+/*
+ID: PlayerLogin Id.
+GameId: PlayerGame Id
+EVENT: One of "Card Drawn", "Card Discarded", "Card Played on Table", "Card added to dead Pile"/ etc.
+
+{
+"player" : <ID>,
+"gameId": <GAMEID>,
+"event" : <EVENT>,
+"detals" : {
+    "cardId" : <CARDID>,
+}
+}
+*/
+function sendCardMovedEvent(msg) {
+    console.log("Dispatching cardMovedEvent: %s", msg)
+    document.dispatchEvent(new CustomEvent("cardEvent", { detail: msg }));
+}
+
 function placeCardInHand(card) {
     console.log("Placing %s into hand", card.id)
 
     // Snap to end of hand location
-    let numCardsInHand = cardsInPlayerHand.length;
+    let numCardsInHand = gameState.cardsInPlayerHand.length;
 
-    card.x = playerHand.x + numCardsInHand * PLAYER_HAND_OFFSET;
-    card.y = playerHand.y;
+    // card.x = playerHand.x + numCardsInHand * PLAYER_HAND_OFFSET;
+    // card.y = playerHand.y;
 
-    cardsInPlayerHand.push(card)
+    gameState.cardsInPlayerHand.push(card)
+
+    // Reshuffle/organize playerhand
+    for (let i = numCardsInHand; i >= 0; i--) {
+        let card = gameState.cardsInPlayerHand[i];
+        card.x = playerHand.x + i * PLAYER_HAND_OFFSET;
+        card.y = playerHand.y;
+    }
+
+    sendCardMovedEvent(`Card Placed in Hand {card.id}`)
 }
 
-function removeCardFromHand(card) {
+function placeCardOnPlayArea(card) {
     console.log("Removing card %s from hand", card.id)
+    gameState.allCards.push(card)
 
-    allCards.push(card)
+    sendCardMovedEvent("Card Removed from Hand" + card.id)
 }
 
 function placeCardInDiscard(card) {
@@ -92,10 +179,24 @@ function placeCardInDiscard(card) {
 
     card.x = discardPile.x;
     card.y = discardPile.y;
+
+    sendCardMovedEvent("Card Placed in Discard:" + card.id)
 }
 
+function placeCardInDeadPile(card) {
+    console.log("Adding card to dead pile")
+
+    cardsInPlayerDeadPile.push(card)
+
+    card.x = deadPile.x
+    card.y = deadPile.y
+
+    sendCardMovedEvent("Card Placed in DeadPile:" + card.id)
+}
+
+
 // ============================================================
-// Game board drawing code
+// Game board drawing code (probably needs to be react.js 'ified.)
 // ============================================================
 
 // Generic drawing of black text
@@ -112,23 +213,54 @@ function drawCardText(text, x, y) {
     ctx.fillText(text, x, y); // Draw the text at position (50, 150)
 }
 
+function getScaledImage(img, width, height) {
+    const offscreen = new OffscreenCanvas(width, height);
+    const offCtx = offscreen.getContext("2d");
+
+    offCtx.imageSmoothingEnabled = true;
+    offCtx.drawImage(img, 0, 0, width, height);
+
+    return offscreen.transferToImageBitmap();
+}
+
+
 // Draw the actual card based on its position/motion/animation info.
-function drawCard(card) {
+function drawCard(card, rotate = false) {
     // Draw semi transparent card
     ctx.fillStyle = card.isDragged ? 'rgba(0, 0, 0, 0.5)' : 'rgba(0, 0, 0, 1.0)';
     ctx.fillRect(card.x, card.y, card.width, card.height);
     ctx.strokeRect(card.x, card.y, card.width, card.height);
 
     // Draw the PNG image inside the card
-    if (cardLibrary[card.id]) {
-        const cardImage = cardLibrary[card.id]
+    const cardImage = getCardImage(card.id)
+    if (cardImage) {
         if (cardImage.complete) {   // Make sure the image is loaded
             ctx.drawImage(cardImage, card.x, card.y, card.width, card.height);
         }
     }
 
+
     let cardText = "Card id:" + card.id
     drawCardText(cardText, card.x + CARD_WIDTH, card.y + card.height / 2 + 16)
+}
+
+function drawCardRotated(card, angle) {
+
+    const cardImage = getCardImage(card.id)
+    if (cardImage) {
+        if (cardImage.complete) {
+
+            ctx.save();
+            ctx.fillStyle = card.isDragged ? 'rgba(0, 0, 0, 0.5)' : 'rgba(0, 0, 0, 1.0)';
+            ctx.translate(card.x, card.y); // set rotation point.
+            ctx.rotate(angle * (Math.PI / 180)); // Convert degrees to radians
+
+            ctx.fillRect(card.x, card.y, card.width, card.height);
+            ctx.strokeRect(card.x, card.y, card.width, card.height);
+            ctx.drawImage(cardImage, -card.width, 0, card.width, card.height);
+            ctx.restore();
+        }
+    }
 }
 
 function drawCardReverse(card) {
@@ -146,8 +278,8 @@ function drawCardReverse(card) {
 // Draw an expanded card for easier view, only on hover in player hand.
 function drawCardPreview(card) {
     let cardPreview = { ...card };
-    cardPreview.width *= 1.8;
-    cardPreview.height *= 1.8;
+    cardPreview.width *= CARD_PREVIEW_SCALE_FACTOR;
+    cardPreview.height *= CARD_PREVIEW_SCALE_FACTOR;
     cardPreview.y = cardPreview.y - cardPreview.height - 5;
     drawCard(cardPreview)
 }
@@ -155,7 +287,7 @@ function drawCardPreview(card) {
 // Draw all "loose leaf" cards on the table.
 function drawCards() {
     // Draw the cards
-    allCards.forEach(card => {
+    gameState.allCards.forEach(card => {
         drawCard(card)
     });
 }
@@ -183,11 +315,11 @@ function drawPlayerHandGradient() {
 // Draw all the cards in a players hand, and if they are hovering over a card, an enlarged one.
 function drawPlayerHand() {
     // Draw cards statically in hand
-    cardsInPlayerHand.forEach(card => {
+    gameState.cardsInPlayerHand.forEach(card => {
 
         if (card.isHover) {
             let offsetCard = { ...card }
-            offsetCard.y = card.y - 50
+            offsetCard.y = card.y - CARD_PREVIEW_SHIFT;
             drawCard(offsetCard)
             drawCardPreview(offsetCard)
         } else {
@@ -196,7 +328,7 @@ function drawPlayerHand() {
         // If mouse is hovering over a card in the player hand enlarge it.
     });
 
-    drawText("Number of Cards in Hand : " + cardsInPlayerHand.length, playerHand.x, playerHand.y + CARD_HEIGHT)
+    drawText("Number of Cards in Hand : " + gameState.cardsInPlayerHand.length, playerHand.x, playerHand.y + CARD_HEIGHT)
 }
 
 function drawDiscardPileBorder() {
@@ -205,15 +337,16 @@ function drawDiscardPileBorder() {
     ctx.strokeStyle = '#000';
     ctx.strokeRect(discardPile.x, discardPile.y, discardPile.width, discardPile.height);
 
-    drawText("DISCARD", discardPile.x + 25, discardPile.y + discardPile.height/2)
+    drawText("DISCARD", discardPile.x + 25, discardPile.y + discardPile.height / 2)
 }
 
 function drawDiscardPile() {
     let numCardsInDiscard = cardsInPlayerDiscard.length
     if (numCardsInDiscard > 0) {
+        // draw rotated.
         drawCard(cardsInPlayerDiscard[numCardsInDiscard - 1])
 
-        if (cardsInPlayerDiscard[numCardsInDiscard - 1]) {
+        if (cardsInPlayerDiscard[numCardsInDiscard - 1].isHover) {
             //console.log("Need to draw a hover of the discard")
             // TODO
         }
@@ -227,14 +360,14 @@ function drawDrawDeckBorder() {
     ctx.strokeStyle = '#000';
     ctx.strokeRect(drawDeck.x, drawDeck.y, drawDeck.width, drawDeck.height);
 
-    drawText("DRAW EMPTY", drawDeck.x + 15, drawDeck.y + drawDeck.height/2)
+    drawText("DRAW EMPTY", drawDeck.x + 15, drawDeck.y + drawDeck.height / 2)
 }
 
 function drawDrawDeck() {
     let numCardsInDrawDeck = cardsInDrawDeck.length
     if (numCardsInDrawDeck > 0) {
-        for(let i = 0; i < numCardsInDrawDeck; i++) {
-            cardsInDrawDeck[i].x = drawDeck.x + i*2;
+        for (let i = 0; i < numCardsInDrawDeck; i++) {
+            cardsInDrawDeck[i].x = drawDeck.x + i;
             drawCardReverse(cardsInDrawDeck[i])
         }
     }
@@ -248,23 +381,56 @@ function drawBackground() {
     }
 }
 
+function drawSiteBorders() {
+    siteSlots.forEach(siteSlot => {
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.5';
+        ctx.fillRect(siteSlot.x, siteSlot.y, siteSlot.width, siteSlot.height);
+        ctx.strokeStyle = '#000';
+        ctx.strokeRect(siteSlot.x, siteSlot.y, siteSlot.width, siteSlot.height);
+    })
+}
+
+function drawDeadPileBorder() {
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.5';
+    ctx.fillRect(deadPile.x, deadPile.y, deadPile.width, deadPile.height);
+    ctx.strokeStyle = '#000';
+    ctx.strokeRect(deadPile.x, deadPile.y, deadPile.width, deadPile.height);
+
+    drawText("DEADPILE", deadPile.x + 25, deadPile.y + deadPile.height / 2)
+}
+
+function drawDeadPile() {
+    let numCardsInDeadPile = cardsInPlayerDeadPile.length
+    if (numCardsInDeadPile > 0) {
+        drawCardRotated(cardsInPlayerDeadPile[numCardsInDeadPile - 1], -90)
+    }
+
+}
+
 function draw() {
     // Draw background image (TODO change each game or add option to change.)
     drawBackground();
     // Draw static images.
     //    drawPlayerHandBorder()
-    drawPlayerHandGradient()
-    drawDiscardPileBorder()
-    drawDrawDeckBorder()
 
     // Draw floating cards.
     drawCards()
+
+    drawPlayerHandGradient();
+    drawDiscardPileBorder();
+    drawDrawDeckBorder();
+    drawSiteBorders();
+    drawDeadPileBorder();
+
+
     // Draw cards in the hand.
     drawPlayerHand()
     // Draw top of discard
     drawDiscardPile()
     // Draw deck
     drawDrawDeck()
+    // Dead Pile
+    drawDeadPile()
 }
 
 // ============================================================
@@ -281,25 +447,51 @@ canvas.addEventListener('mousedown', (e) => {
     mouseX = e.offsetX;
     mouseY = e.offsetY;
 
-    for (let i = allCards.length - 1; i >= 0; i--) {
-        let card = allCards[i]
-        if (isMouseOverCard(card)) {
-            card.isDragged = true;
-            gameState.dragActive = true;
-            console.log("mousedown event for card %d (id:%d)", i, card.id)
-            break;
-        }
-    }
-
-    for (let i = cardsInPlayerHand.length - 1; i >= 0; i--) {
-        let card = cardsInPlayerHand[i]
+    // Handle player zones before "free leaf cards"
+    for (let i = gameState.cardsInPlayerHand.length - 1; i >= 0; i--) {
+        let card = gameState.cardsInPlayerHand[i]
         if (isMouseOverCard(card)) {
             card.isDragged = true;
             gameState.dragActive = true;
             console.log("mousedown event for %d", card.id)
-            break;
+            return;
         }
     };
+
+    console.log("Mousedown event, discardLen: %d", cardsInPlayerDiscard.length)
+    if (cardsInPlayerDiscard.length > 0) {
+
+        let card = cardsInPlayerDiscard[cardsInPlayerDiscard.length - 1];
+        console.log("Discard pile check, checking: %s", card.id)
+        if (isMouseOverCard(card)) {
+            card.isDragged = true;
+            gameState.dragActive = true;
+            console.log("mousedown event for %d", card.id)
+            return;
+        }
+    };
+
+    if (cardsInPlayerDeadPile.length > 0) {
+        let card = cardsInPlayerDeadPile[cardsInPlayerDeadPile.length - 1];
+        if (isMouseOverCard(card)) {
+            card.isDragged = true;
+            gameState.dragActive = true;
+            console.log("mousedown event for %d", card.id)
+            return;
+        }
+    };
+
+    for (let i = gameState.allCards.length - 1; i >= 0; i--) {
+        let card = gameState.allCards[i]
+        if (isMouseOverCard(card)) {
+            card.isDragged = true;
+            gameState.dragActive = true;
+            console.log("mousedown event for card %d (id:%d)", i, card.id)
+            return;
+        }
+    }
+
+
 });
 
 // Handle mouse move event to drag the card
@@ -309,30 +501,46 @@ canvas.addEventListener('mousemove', (e) => {
 
     // Draw drag movement.
     if (gameState.dragActive) {
-        allCards.forEach(card => {
+        gameState.allCards.forEach(card => {
             if (card.isDragged) {
                 card.x = mouseX - card.width / 2;
                 card.y = mouseY - card.height / 2;
             }
         });
 
-        cardsInPlayerHand.forEach(card => {
+        gameState.cardsInPlayerHand.forEach(card => {
             if (card.isDragged) {
                 card.x = mouseX - card.width / 2;
                 card.y = mouseY - card.height / 2;
             }
         });
+
+        if (cardsInPlayerDeadPile.length > 0) {
+            let card = cardsInPlayerDeadPile[cardsInPlayerDeadPile.length - 1]
+            if (card.isDragged) {
+                card.x = mouseX - card.width / 2;
+                card.y = mouseY - card.height / 2;
+            }
+        }
+
+        if (cardsInPlayerDiscard.length > 0) {
+            let card = cardsInPlayerDiscard[cardsInPlayerDiscard.length - 1]
+            if (card.isDragged) {
+                card.x = mouseX - card.width / 2;
+                card.y = mouseY - card.height / 2;
+            }
+        }
     }
 
     // Check for hover mechanics
-    cardsInPlayerHand.forEach(card => {
+    gameState.cardsInPlayerHand.forEach(card => {
         card.isHover = false;
     });
 
     // Check for hover mechanics.
     if (gameState.dragActive == false) {
-        for (let i = cardsInPlayerHand.length - 1; i >= 0; i--) {
-            let card = cardsInPlayerHand[i];
+        for (let i = gameState.cardsInPlayerHand.length - 1; i >= 0; i--) {
+            let card = gameState.cardsInPlayerHand[i];
             if (isMouseOverCard(card)) {
                 card.isHover = true;
                 break;
@@ -358,22 +566,21 @@ function cardInSnapArea(snapArea) {
 
 function handleFreeCardMoved() {
     // Check to see if the card moved from the board "canvas" into hand.
-    for (let i = allCards.length - 1; i >= 0; i--) {
-        let card = allCards[i];
+    for (let i = gameState.allCards.length - 1; i >= 0; i--) {
+        let card = gameState.allCards[i];
         if (card.isDragged) {
+            const selectedCard = gameState.allCards.splice(i, 1)[0]; // Remove card from array
             // Snap to the target area if it's close enough
             if (cardInSnapArea(playerHand)) {
-                // Move the selected card to the top of the stack (bring it to front)
-                const selectedCard = allCards.splice(i, 1)[0]; // Remove card from array
                 placeCardInHand(selectedCard)
             } else if (cardInSnapArea(discardPile)) {
-                const selectedCard = allCards.splice(i, 1)[0];
                 placeCardInDiscard(selectedCard)
+            } else if (cardInSnapArea(deadPile)) {
+                placeCardInDeadPile(selectedCard)
             } else {
-                const selectedCard = allCards.splice(i, 1)[0]; // Remove card from array
-                removeCardFromHand(selectedCard);
+                placeCardOnPlayArea(selectedCard);
             }
-            card.isDragged = false;
+            selectedCard.isDragged = false;
             gameState.dragActive = false;
             break;
         }
@@ -382,24 +589,26 @@ function handleFreeCardMoved() {
 
 function handlePlayerCardMoved() {
     // Check to see if card moved from hand onto board.
-    for (let i = cardsInPlayerHand.length - 1; i >= 0; i--) {
-        let card = cardsInPlayerHand[i];
+    for (let i = gameState.cardsInPlayerHand.length - 1; i >= 0; i--) {
+        let card = gameState.cardsInPlayerHand[i];
         if (card.isDragged) {
-            if (cardInSnapArea(playerHand) == false) {
-                const selectedCard = cardsInPlayerHand.splice(i, 1)[0];
-                removeCardFromHand(selectedCard)
-            } else {
+            const selectedCard = gameState.cardsInPlayerHand.splice(i, 1)[0];
+            if (cardInSnapArea(playerHand)) {
                 // Move the selected card to the top of the stack (bring it to front)
-                const selectedCard = cardsInPlayerHand.splice(i, 1)[0];
                 placeCardInHand(selectedCard)
+            } else if (cardInSnapArea(discardPile)) {
+                placeCardInDiscard(selectedCard)
+            } else {
+                placeCardOnPlayArea(selectedCard)
             }
-            card.isDragged = false;
+            selectedCard.isDragged = false;
             gameState.dragActive = false;
             break;
         }
     }
 }
 
+// Cards from deck immediately go into player Hand.
 function handleDrawDeckRelease() {
     if (cardsInDrawDeck.length > 0) {
         if (isMouseOverCard(cardsInDrawDeck[0])) {
@@ -411,6 +620,42 @@ function handleDrawDeckRelease() {
     }
 }
 
+function handleDiscardRelease() {
+    if (cardsInPlayerDiscard.length > 0) {
+        let card = cardsInPlayerDiscard[cardsInPlayerDiscard.length - 1]
+        if (card.isDragged) {
+            const selectedCard = cardsInPlayerDiscard.pop();
+            if (cardInSnapArea(playerHand)) {
+                // Move the selected card to the top of the stack (bring it to front)
+                placeCardInHand(selectedCard)
+            } else {
+                placeCardOnPlayArea(selectedCard)
+            }
+            selectedCard.isDragged = false;
+            gameState.dragActive = false;
+        }
+    }
+}
+
+function handleDeadPileRelease() {
+    if (cardsInPlayerDeadPile.length > 0) {
+        let card = cardsInPlayerDeadPile[cardsInPlayerDeadPile.length - 1]
+        if (card.isDragged) {
+            if (cardInSnapArea(playerHand) == false) {
+                const selectedCard = cardsInPlayerDeadPile.pop();
+                placeCardOnPlayArea(selectedCard)
+            } else {
+                // Move the selected card to the top of the stack (bring it to front)
+                const selectedCard = cardsInPlayerDeadPile.pop();
+                placeCardInHand(selectedCard)
+            }
+            card.isDragged = false;
+            gameState.dragActive = false;
+        }
+    }
+}
+
+
 // Handle mouse up event to stop dragging and snap the card
 canvas.addEventListener('mouseup', () => {
 
@@ -418,7 +663,8 @@ canvas.addEventListener('mouseup', () => {
     handleFreeCardMoved()
     handlePlayerCardMoved()
     handleDrawDeckRelease()
-
+    handleDiscardRelease()
+    handleDeadPileRelease()
     draw();
 });
 
@@ -430,10 +676,11 @@ document.addEventListener('cardAdded', (msg) => {
             width: CARD_WIDTH, height: CARD_HEIGHT,
             isDragged: false, isHover: false
         };
-        allCards.push(newCard);
+        gameState.allCards.push(newCard);
     }
     draw();
 })
+
 
 // Initial draw
 draw();
