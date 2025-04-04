@@ -10,6 +10,10 @@ console.log("Server is starting");
 
 app.use(express.static('public'))
 
+app.get("/", (req, res) => {
+    res.sendFile(__dirname + "/public/login.html");
+  });
+
 io.on('connection', (socket) => {
     console.log('A user connected:', socket.id);
 

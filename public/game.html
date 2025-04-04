@@ -17,22 +17,24 @@
     <h1 id="loginGreeting">Welcome to the TestApp </h1>
     <input id="msg" type="text" placeholder="Enter a Card ID">
     <button onclick="sendMessage()"> Add Card To Deck</button>
-    <h2>Current Deck List:</h2>
-    <ul id="messages"></ul>
+    <h2>GameId:</h2>
+    <ul id="gameId">"-"</ul>
 
     <script>
         window.onload = function () {
-            const playerInfo = localStorage.getItem("playerInfo");
+            const playerInfo = localStorage.getItem("playerName");
+            const gameId = localStorage.getItem("gameID");
             const heading = document.getElementById("loginGreeting");
             if (playerInfo) {
-                heading.innerText = "Welcome Back to the LOTR TCG, " + playerInfo;
-            } else {
-                heading.innerText = "Well met, Traveler.";
+                heading.innerText = "Welcome to the LOTR TCG " + playerInfo;
             }
+            const gameIdHeading = document.getElementById("gameId")
+            gameIdHeading.innerText = gameId
+
         };
     </script>
 
-    <input id="playerInfo" type="text" placeholder="What is your player name?">
+    <!-- <input id="playerInfo" type="text" placeholder="What is your player name?">
     <button onclick="updatePlayerInfo()"> Send</button>
     <script>
         function updatePlayerInfo() {
@@ -41,7 +43,7 @@
             socket.emit('playerInfoUpdated', info);
             localStorage.setItem("playerInfo", info);
         }
-    </script>
+    </script> -->
 
     <h1></h1>
     <canvas id="gameCanvas" width="7680" height="4320"></canvas>
@@ -54,7 +56,7 @@
         socket.on('messageAck', (data) => {
             const li = document.createElement('li');
             li.textContent = data;
-            document.getElementById('messages').appendChild(li);
+            document.getElementById('serverLog').appendChild(li);
         });
 
         function sendMessage() {
@@ -67,13 +69,21 @@
 
         document.addEventListener('cardEvent', (msg) => {
             console.log("Got a card Movement Event message: %s", msg.detail)
+            const li = document.createElement('li');
+            li.textContent = msg.detail;
+            document.getElementById('serverLog').appendChild(li);
             socket.emit('cardEvent', msg.detail)
         })
+
         socket.on('cardEventAck', (msg) => {
-            console.log("cardEventAck")
+            console.log("cardEventAck");
+
         })
 
     </script>
+
+    <h2>ServerLog:</h2>
+    <ul id="serverLog"></ul>
 
 </body>
 

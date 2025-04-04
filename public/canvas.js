@@ -33,8 +33,8 @@ function getCardImage(cardId) {
 let mouseX = 0;
 let mouseY = 0;
 
-const CARD_HEIGHT = 994 / 4;
-const CARD_WIDTH = 714 / 4;
+const CARD_HEIGHT = 994 / 5;
+const CARD_WIDTH = 714 / 5;
 
 const SITE_CARD_HEIGHT = 714 / 5;
 const SITE_CARD_WIDTH = 994 / 5;
@@ -73,7 +73,8 @@ const siteSlot = {
 const siteSlots = [];
 for (let i = 0; i < 9; i++) {
     siteSlots.push({
-        x: canvas.width - SITE_CARD_WIDTH - 10, y: canvas.height * 0.025 + ((SITE_CARD_HEIGHT + 5) * i),
+        x: deadPile.x + SITE_CARD_WIDTH + 20,
+        y: canvas.height * 0.025 + ((SITE_CARD_HEIGHT + 5) * i),
         width: SITE_CARD_WIDTH, height: SITE_CARD_HEIGHT
     });
 }
@@ -83,11 +84,10 @@ for (let i = 0; i < 9; i++) {
 const gameState = {
     dragActive: false,
     allCards: [],
-    cardsInPlayerHand: []
+    cardsInPlayerHand: [],
+    cardsInPlayerDiscard: [],
+    cardsInSiteSlots: []
 }
-
-const cardsInPlayerDiscard = [
-]
 
 const cardsInPlayerDeadPile = [
 
@@ -117,6 +117,9 @@ function initCardDeck() {
     // Load from starter deck.
     // E.g. csv.lines.forEach({cardsInDrawDeck.push(initCard(line))})
     cardsInDrawDeck.push(initCard("LOTR-EN01100"))
+    cardsInDrawDeck.push(initCard("LOTR-EN01359"))
+    cardsInDrawDeck.push(initCard("LOTR-EN01358"))
+    cardsInDrawDeck.push(initCard("LOTR-EN01359"))
 }
 
 initCardDeck()
@@ -175,7 +178,7 @@ function placeCardOnPlayArea(card) {
 function placeCardInDiscard(card) {
     console.log("Discarding card id:%s", card.id)
 
-    cardsInPlayerDiscard.push(card)
+    gameState.cardsInPlayerDiscard.push(card)
 
     card.x = discardPile.x;
     card.y = discardPile.y;
@@ -192,6 +195,22 @@ function placeCardInDeadPile(card) {
     card.y = deadPile.y
 
     sendCardMovedEvent("Card Placed in DeadPile:" + card.id)
+}
+
+function placeCardAtSite(siteNum, card) {
+    console.log("Adding card to site :%d", siteNum)
+
+    if (siteNum < siteSlots.length) {
+        if (gameState.cardsInSiteSlots[siteNum]) {
+            console.log("Card already exists at site:%d", siteNum + 1)
+        } else {
+            gameState.cardsInSiteSlots[siteNum] = card;
+            card.x = siteSlots[siteNum].x
+            card.y = siteSlots[siteNum].y
+            return true
+        }
+    }
+    return false
 }
 
 
@@ -245,7 +264,6 @@ function drawCard(card, rotate = false) {
 }
 
 function drawCardRotated(card, angle) {
-
     const cardImage = getCardImage(card.id)
     if (cardImage) {
         if (cardImage.complete) {
@@ -257,7 +275,7 @@ function drawCardRotated(card, angle) {
 
             ctx.fillRect(card.x, card.y, card.width, card.height);
             ctx.strokeRect(card.x, card.y, card.width, card.height);
-            ctx.drawImage(cardImage, -card.width, 0, card.width, card.height);
+            ctx.drawImage(cardImage, 0, -card.height, card.width, card.height);
             ctx.restore();
         }
     }
@@ -288,7 +306,12 @@ function drawCardPreview(card) {
 function drawCards() {
     // Draw the cards
     gameState.allCards.forEach(card => {
-        drawCard(card)
+        if (card.isHover) {
+            drawCard(card)
+            drawCardPreview(card)
+        } else {
+            drawCard(card);
+        }
     });
 }
 
@@ -316,7 +339,7 @@ function drawPlayerHandGradient() {
 function drawPlayerHand() {
     // Draw cards statically in hand
     gameState.cardsInPlayerHand.forEach(card => {
-
+        // If mouse is hovering over a card in the player hand enlarge it.
         if (card.isHover) {
             let offsetCard = { ...card }
             offsetCard.y = card.y - CARD_PREVIEW_SHIFT;
@@ -325,7 +348,6 @@ function drawPlayerHand() {
         } else {
             drawCard(card);
         }
-        // If mouse is hovering over a card in the player hand enlarge it.
     });
 
     drawText("Number of Cards in Hand : " + gameState.cardsInPlayerHand.length, playerHand.x, playerHand.y + CARD_HEIGHT)
@@ -341,14 +363,17 @@ function drawDiscardPileBorder() {
 }
 
 function drawDiscardPile() {
-    let numCardsInDiscard = cardsInPlayerDiscard.length
+    let numCardsInDiscard = gameState.cardsInPlayerDiscard.length
     if (numCardsInDiscard > 0) {
         // draw rotated.
-        drawCard(cardsInPlayerDiscard[numCardsInDiscard - 1])
-
-        if (cardsInPlayerDiscard[numCardsInDiscard - 1].isHover) {
-            //console.log("Need to draw a hover of the discard")
-            // TODO
+        let card = gameState.cardsInPlayerDiscard[numCardsInDiscard - 1]
+        if (card.isHover) {
+            let offsetCard = { ...card }
+            offsetCard.y = card.y - CARD_PREVIEW_SHIFT;
+            drawCard(offsetCard)
+            drawCardPreview(offsetCard)
+        } else {
+            drawCard(card);
         }
     }
 }
@@ -402,9 +427,20 @@ function drawDeadPileBorder() {
 function drawDeadPile() {
     let numCardsInDeadPile = cardsInPlayerDeadPile.length
     if (numCardsInDeadPile > 0) {
-        drawCardRotated(cardsInPlayerDeadPile[numCardsInDeadPile - 1], -90)
+        drawCardRotated(cardsInPlayerDeadPile[numCardsInDeadPile - 1], 90)
     }
+}
 
+function drawSiteCard(card) {
+    drawCardRotated(card, 90)
+}
+
+function drawSiteCards() {
+    for (let i = 0; i < gameState.cardsInSiteSlots.length; i++) {
+        if (gameState.cardsInSiteSlots[i]) {
+            drawSiteCard(gameState.cardsInSiteSlots[i])
+        }
+    }
 }
 
 function draw() {
@@ -431,6 +467,8 @@ function draw() {
     drawDrawDeck()
     // Dead Pile
     drawDeadPile()
+    // sites.
+    drawSiteCards()
 }
 
 // ============================================================
@@ -458,25 +496,34 @@ canvas.addEventListener('mousedown', (e) => {
         }
     };
 
-    console.log("Mousedown event, discardLen: %d", cardsInPlayerDiscard.length)
-    if (cardsInPlayerDiscard.length > 0) {
-
-        let card = cardsInPlayerDiscard[cardsInPlayerDiscard.length - 1];
+    console.log("Mousedown event, discardLen: %d", gameState.cardsInPlayerDiscard.length)
+    if (gameState.cardsInPlayerDiscard.length > 0) {
+        let card = gameState.cardsInPlayerDiscard[gameState.cardsInPlayerDiscard.length - 1];
         console.log("Discard pile check, checking: %s", card.id)
         if (isMouseOverCard(card)) {
             card.isDragged = true;
             gameState.dragActive = true;
-            console.log("mousedown event for %d", card.id)
+            console.log("mousedown event for %s", card.id)
             return;
         }
     };
+
+    gameState.cardsInSiteSlots.forEach(card => {
+        // Check to make a card exists at that slot.
+        if (card && isMouseOverCard(card)) {
+            card.isDragged = true;
+            gameState.dragActive = true;
+            console.log("mousedown event for :%s", card.id);
+            return;
+        }
+    })
 
     if (cardsInPlayerDeadPile.length > 0) {
         let card = cardsInPlayerDeadPile[cardsInPlayerDeadPile.length - 1];
         if (isMouseOverCard(card)) {
             card.isDragged = true;
             gameState.dragActive = true;
-            console.log("mousedown event for %d", card.id)
+            console.log("mousedown event for %s", card.id)
             return;
         }
     };
@@ -523,17 +570,29 @@ canvas.addEventListener('mousemove', (e) => {
             }
         }
 
-        if (cardsInPlayerDiscard.length > 0) {
-            let card = cardsInPlayerDiscard[cardsInPlayerDiscard.length - 1]
+        if (gameState.cardsInPlayerDiscard.length > 0) {
+            let card = gameState.cardsInPlayerDiscard[gameState.cardsInPlayerDiscard.length - 1]
             if (card.isDragged) {
                 card.x = mouseX - card.width / 2;
                 card.y = mouseY - card.height / 2;
             }
         }
+        gameState.cardsInSiteSlots.forEach(card => {
+            if (card && card.isDragged) {
+                card.x = mouseX - card.width /2;
+                card.y = mouseY - card.height /2
+            }
+        })
     }
 
     // Check for hover mechanics
     gameState.cardsInPlayerHand.forEach(card => {
+        card.isHover = false;
+    });
+    gameState.cardsInPlayerDiscard.forEach(card => {
+        card.isHover = false;
+    });
+    gameState.allCards.forEach(card => {
         card.isHover = false;
     });
 
@@ -547,11 +606,19 @@ canvas.addEventListener('mousemove', (e) => {
             }
         };
 
-        let numCardsInDiscard = cardsInPlayerDiscard.length
+        let numCardsInDiscard = gameState.cardsInPlayerDiscard.length
         if (numCardsInDiscard > 0) {
-            let card = cardsInPlayerDiscard[numCardsInDiscard - 1];
+            let card = gameState.cardsInPlayerDiscard[numCardsInDiscard - 1];
             if (isMouseOverCard(card)) {
                 card.isHover = true;
+            }
+        }
+
+        for(let i = gameState.allCards.length -1; i >=0; i--) {
+            let card = gameState.allCards[i];
+            if (isMouseOverCard(card)) {
+                card.isHover = true;
+                break;
             }
         }
     }
@@ -563,6 +630,35 @@ function cardInSnapArea(snapArea) {
         mouseY >= snapArea.y && mouseY <= snapArea.y + snapArea.height;
 }
 
+function handleSitePlacement(card) {
+    for (let i = 0; i < siteSlots.length - 1; i++) {
+        let site = siteSlots[i]
+        if (cardInSnapArea(site)) {
+            return placeCardAtSite(i, card);
+            return false
+            console.log("Did not return???")
+        }
+    }
+    console.log("Did not find site, returning")
+    return false
+}
+
+function handleGenericCardMoved(selectedCard) {
+    // Generic handler for moving/playing cards.
+    if (cardInSnapArea(playerHand)) {
+        placeCardInHand(selectedCard)
+    } else if (cardInSnapArea(discardPile)) {
+        placeCardInDiscard(selectedCard)
+    } else if (cardInSnapArea(deadPile)) {
+        placeCardInDeadPile(selectedCard)
+    } else if (handleSitePlacement(selectedCard)) {
+        console.log("Site place handled")
+    } else {
+        placeCardOnPlayArea(selectedCard);
+    }
+    selectedCard.isDragged = false;
+    gameState.dragActive = false;
+}
 
 function handleFreeCardMoved() {
     // Check to see if the card moved from the board "canvas" into hand.
@@ -571,18 +667,8 @@ function handleFreeCardMoved() {
         if (card.isDragged) {
             const selectedCard = gameState.allCards.splice(i, 1)[0]; // Remove card from array
             // Snap to the target area if it's close enough
-            if (cardInSnapArea(playerHand)) {
-                placeCardInHand(selectedCard)
-            } else if (cardInSnapArea(discardPile)) {
-                placeCardInDiscard(selectedCard)
-            } else if (cardInSnapArea(deadPile)) {
-                placeCardInDeadPile(selectedCard)
-            } else {
-                placeCardOnPlayArea(selectedCard);
-            }
-            selectedCard.isDragged = false;
-            gameState.dragActive = false;
-            break;
+            handleGenericCardMoved(selectedCard)
+            break
         }
     }
 }
@@ -593,16 +679,7 @@ function handlePlayerCardMoved() {
         let card = gameState.cardsInPlayerHand[i];
         if (card.isDragged) {
             const selectedCard = gameState.cardsInPlayerHand.splice(i, 1)[0];
-            if (cardInSnapArea(playerHand)) {
-                // Move the selected card to the top of the stack (bring it to front)
-                placeCardInHand(selectedCard)
-            } else if (cardInSnapArea(discardPile)) {
-                placeCardInDiscard(selectedCard)
-            } else {
-                placeCardOnPlayArea(selectedCard)
-            }
-            selectedCard.isDragged = false;
-            gameState.dragActive = false;
+            handleGenericCardMoved(selectedCard)
             break;
         }
     }
@@ -621,18 +698,11 @@ function handleDrawDeckRelease() {
 }
 
 function handleDiscardRelease() {
-    if (cardsInPlayerDiscard.length > 0) {
-        let card = cardsInPlayerDiscard[cardsInPlayerDiscard.length - 1]
+    if (gameState.cardsInPlayerDiscard.length > 0) {
+        let card = gameState.cardsInPlayerDiscard[gameState.cardsInPlayerDiscard.length - 1]
         if (card.isDragged) {
-            const selectedCard = cardsInPlayerDiscard.pop();
-            if (cardInSnapArea(playerHand)) {
-                // Move the selected card to the top of the stack (bring it to front)
-                placeCardInHand(selectedCard)
-            } else {
-                placeCardOnPlayArea(selectedCard)
-            }
-            selectedCard.isDragged = false;
-            gameState.dragActive = false;
+            const selectedCard = gameState.cardsInPlayerDiscard.pop();
+            handleGenericCardMoved(selectedCard);
         }
     }
 }
@@ -641,18 +711,22 @@ function handleDeadPileRelease() {
     if (cardsInPlayerDeadPile.length > 0) {
         let card = cardsInPlayerDeadPile[cardsInPlayerDeadPile.length - 1]
         if (card.isDragged) {
-            if (cardInSnapArea(playerHand) == false) {
-                const selectedCard = cardsInPlayerDeadPile.pop();
-                placeCardOnPlayArea(selectedCard)
-            } else {
-                // Move the selected card to the top of the stack (bring it to front)
-                const selectedCard = cardsInPlayerDeadPile.pop();
-                placeCardInHand(selectedCard)
-            }
-            card.isDragged = false;
-            gameState.dragActive = false;
+            const selectedCard = cardsInPlayerDeadPile.pop();
+            handleGenericCardMoved(selectedCard)
         }
     }
+}
+
+function handleSiteSlotsRelease() {
+
+    for (let i = 0; i < gameState.cardsInSiteSlots.length; i++) {
+        let card = gameState.cardsInSiteSlots[i];
+        if (card && card.isDragged) {
+            handleGenericCardMoved(card);
+            gameState.cardsInSiteSlots[i] = null;
+            break;;
+        } 
+    } 
 }
 
 
@@ -665,6 +739,7 @@ canvas.addEventListener('mouseup', () => {
     handleDrawDeckRelease()
     handleDiscardRelease()
     handleDeadPileRelease()
+    handleSiteSlotsRelease()
     draw();
 });
 
