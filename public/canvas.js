@@ -1,4 +1,5 @@
 import { LOTR_STARTER_DECK_ARAGORN } from "./decks.js";
+import { initializePlayerDeck } from "./decks.js";
 
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
@@ -117,11 +118,15 @@ const gameState = {
     cardsInOpponentsDiscard: [],
     cardsInOpponentDeadPile: [],
     cardsInOpponentDrawDeck: [],
+    cardsInOpponentSite: [],
 }
 
+let uuid_ref = 0;
 function initCard(_id) {
+    uuid_ref++;
     return {
-        id: _id,
+        id: _id, // This is the reefrence picture
+        ref: uuid_ref, // unique identifier for this players instance of _id
         x: drawDeck.x,
         y: drawDeck.y,
         z: 0,
@@ -132,18 +137,23 @@ function initCard(_id) {
     }
 }
 
-function initCardDeck() {
+
+async function initCardDeck() {
     // Load from starter deck.
     // E.g. csv.lines.forEach({cardsInDrawDeck.push(initCard(line))})
-    LOTR_STARTER_DECK_ARAGORN.forEach(cardId => {
-        gameState.cardsInDrawDeck.push(initCard(cardId));
-    })
-
     gameState.playerName = sessionStorage.getItem("playerName")
     gameState.gameId = sessionStorage.getItem("gameId")
+    gameState.deck = sessionStorage.getItem("deckName")
+
+    
+    let initialDeck = await initializePlayerDeck(gameState.deck)
+    initialDeck.forEach(cardObj => {
+        console.log(JSON.stringify(cardObj, null, 2));
+        gameState.cardsInDrawDeck.push(initCard(cardObj.cardId));
+    })
 }
 
-initCardDeck()
+await initCardDeck();
 
 // ============================================================
 // Card Management, needs events to me sent back to server.
@@ -164,10 +174,11 @@ EVENT: One of "Card Drawn", "Card Discarded", "Card Played on Table", "Card adde
 }
 */
 
-function sendCardMovedEvent(_from, _to, card) {
+function sendCardMovedEvent(_from, _to, card, _site = 0) {
     let event = {
         type: "moveCard",
         cardId: card.id,
+        cardRef: card.ref,
         fromPile: _from,
         toPile: _to,
         position: { x: Math.round(card.x), y: Math.round(card.y) }, // only relevant for in play cards.
@@ -227,18 +238,18 @@ function placeCardInDeadPile(from, card) {
     sendCardMovedEvent(from, "playerDeadPile", card)
 }
 
-function placeCardAtSite(siteNum, card) {
+function placeCardAtSite(from, card, siteNum) {
     console.log("Adding card to site :%d", siteNum)
 
     if (siteNum < siteSlots.length) {
-        if (gameState.cardsInSiteSlots[siteNum]) {
+        if (gameState.cardsInSiteSlots[siteNum] || gameState.cardsInOpponentSite[siteNum]) {
             console.log("Card already exists at site: %d", siteNum + 1)
         } else {
             gameState.cardsInSiteSlots[siteNum] = card;
             card.x = siteSlots[siteNum].x
             card.y = siteSlots[siteNum].y
 
-            sendCardMovedEvent("", "siteNumber"+(siteNum + 1), card)
+            sendCardMovedEvent(from, "site" + (siteNum + 1), card)
             return true
         }
     }
@@ -264,13 +275,21 @@ function drawText(text, x, y, centered = true) {
 // Card text is against black background, so draw white (if applicable)
 function drawCardText(text, x, y) {
     ctx.font = '10px "Uncial Antiqua", cursive'; // Set font size and type
-    ctx.fillStyle = 'white'; // Set text color
+    ctx.fillStyle = 'black'; // Set text color
     ctx.fillText(text, x, y); // Draw the text at position (50, 150)
 }
 
+function drawRect(area, text = "") {
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.5';
+    ctx.fillRect(area.x, area.y, area.width, area.height);
+    ctx.strokeStyle = '#000';
+    ctx.strokeRect(area.x, area.y, area.width, area.height);
+
+    drawText(text, area.x + area.width / 2, area.y + area.height / 2)
+}
 
 // Draw the actual card based on its position/motion/animation info.
-function drawCard(card) {
+function drawCard(card, shadowColor = 'white') {
     // Draw semi transparent card
     ctx.fillStyle = card.isDragged ? 'rgba(0, 0, 0, 0.5)' : 'rgba(0, 0, 0, 1.0)';
     ctx.fillRect(card.x, card.y, card.width, card.height);
@@ -282,18 +301,18 @@ function drawCard(card) {
         if (cardImage.complete) {   // Make sure the image is loaded
             ctx.save()
             if (card.isDragged) {
-                ctx.shadowColor = 'white';
+                ctx.shadowColor = shadowColor;
                 ctx.shadowBlur = 20;
             }
             ctx.drawImage(cardImage, card.x, card.y, card.width, card.height);
             ctx.restore();
         }
     }
-    // let cardText = "Card id:" + card.id
-    // drawCardText(cardText, card.x + CARD_WIDTH, card.y + card.height / 2 + 16)
+    let cardText = "Card id:" + card.id + "card ref:" + card.ref
+    drawCardText(cardText, card.x + CARD_WIDTH, card.y + card.height / 2 + 16)
 }
 
-function drawCardRotated(card, angle) {
+function drawCardRotated(card, angle, shadowColor=null) {
     const cardImage = getCardImage(card.id)
     if (cardImage) {
         if (cardImage.complete) {
@@ -305,6 +324,10 @@ function drawCardRotated(card, angle) {
 
             ctx.fillRect(card.x, card.y, card.width, card.height);
             ctx.strokeRect(card.x, card.y, card.width, card.height);
+            if (shadowColor) {
+                ctx.shadowColor = shadowColor;
+                ctx.shadowBlur = 20;
+            }
             ctx.drawImage(cardImage, 0, -card.height, card.width, card.height);
             ctx.restore();
         }
@@ -324,12 +347,18 @@ function drawCardReverse(card) {
 }
 
 // Draw an expanded card for easier view, only on hover in player hand.
-function drawCardPreview(card) {
+function drawCardPreview(card, drawUnder = false) {
     let cardPreview = { ...card };
     cardPreview.width *= CARD_PREVIEW_SCALE_FACTOR;
     cardPreview.height *= CARD_PREVIEW_SCALE_FACTOR;
-    cardPreview.y = cardPreview.y - cardPreview.height - 5;
+    if (drawUnder) {
+        cardPreview.y = card.y + card.height + 5
+    } else {
+        cardPreview.y = cardPreview.y - cardPreview.height - 5;
+    }
     drawCard(cardPreview)
+
+    drawText(JSON.stringify(card, null, 2), cardPreview.x + cardPreview.width / 2, cardPreview.y + cardPreview.height / 2)
 }
 
 // Draw all "loose leaf" cards on the table.
@@ -343,6 +372,62 @@ function drawCards() {
             drawCard(card);
         }
     });
+}
+
+function drawOpponentCardsInPlay() {
+    gameState.cardsInOpponentPlay.forEach(card => {
+        if (card.isHover) {
+            let tmp = card.isDragged;
+            card.isDragged = true;
+            drawCard(card, 'red')
+            card.isDragged = tmp
+            drawCardPreview(card)
+        } else {
+            card.isDragged = true
+            drawCard(card, 'red');
+            card.isDragged = false
+        }
+    })
+}
+
+function drawOpponentDiscardPile() {
+    let numCardsInDiscard = gameState.cardsInOpponentsDiscard.length
+    if (numCardsInDiscard > 0) {
+        // draw rotated.
+        let card = gameState.cardsInOpponentsDiscard[numCardsInDiscard - 1]
+        card.x = opponentDiscardPile.x;
+        card.y = opponentDiscardPile.y;
+        if (card.isHover) {
+            let offsetCard = { ...card }
+            offsetCard.y = card.y + CARD_PREVIEW_SHIFT;
+            drawCard(offsetCard)
+            drawCardPreview(offsetCard, true)
+        } else {
+            drawCard(card);
+        }
+    }
+}
+
+function drawOpponentDeck() {
+    let numCardsInDrawDeck = gameState.cardsInOpponentDrawDeck.length
+    if (numCardsInDrawDeck > 0) {
+        for (let i = 0; i < numCardsInDrawDeck; i++) {
+            // draw a square decreasing draw deck.
+            gameState.cardsInOpponentDrawDeck[i].y = opponentDeck.y;
+            gameState.cardsInOpponentDrawDeck[i].x = opponentDeck.x + Math.floor(Math.sqrt(i)) * 2;
+            drawCardReverse(gameState.cardsInOpponentDrawDeck[i])
+        }
+    }
+}
+
+function drawOpponentHand() {
+    let i = 0;
+    gameState.cardsInOpponentsHand.forEach(card => {
+        card.x = opponentHand.x + PLAYER_HAND_OFFSET * i;
+        card.y = opponentHand.y;
+        i++;
+        drawCardReverse(card);
+    })
 }
 
 function drawPlayerHandGradient() {
@@ -376,12 +461,7 @@ function drawPlayerHand() {
 }
 
 function drawDiscardPileBorder() {
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.5';
-    ctx.fillRect(discardPile.x, discardPile.y, discardPile.width, discardPile.height);
-    ctx.strokeStyle = '#000';
-    ctx.strokeRect(discardPile.x, discardPile.y, discardPile.width, discardPile.height);
-
-    drawText("DISCARD", discardPile.x + discardPile.width / 2, discardPile.y + discardPile.height / 2)
+    drawRect(discardPile, "DISCARD");
 }
 
 function drawDiscardPile() {
@@ -402,12 +482,7 @@ function drawDiscardPile() {
 
 // Yes... draw the "Draw" deck.. TODO, rename draw->  render?
 function drawDrawDeckBorder() {
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.5';
-    ctx.fillRect(drawDeck.x, drawDeck.y, drawDeck.width, drawDeck.height);
-    ctx.strokeStyle = '#000';
-    ctx.strokeRect(drawDeck.x, drawDeck.y, drawDeck.width, drawDeck.height);
-
-    drawText("DRAW EMPTY", drawDeck.x + drawDeck.width / 2, drawDeck.y + drawDeck.height / 2)
+    drawRect("DRAW EMPTY", drawDeck)
 }
 
 function drawDrawDeck() {
@@ -418,7 +493,6 @@ function drawDrawDeck() {
             drawCardReverse(gameState.cardsInDrawDeck[i])
         }
     }
-
 }
 
 function drawBackground() {
@@ -457,32 +531,31 @@ function drawDeadPile() {
     }
 }
 
-function drawSiteCard(card) {
+
+function drawSiteCard(card, shadowColor) {
     let siteCard = { ...card }
     siteCard.width = SITE_CARD_HEIGHT;
     siteCard.height = SITE_CARD_WIDTH;
-    drawCardRotated(siteCard, 90)
+    drawCardRotated(siteCard, 90, shadowColor)
     if (siteCard.isHover) {
-        drawCardPreview(siteCard)
+        drawCardPreview(siteCard); // needs to be rotated
     }
 }
 
 function drawSiteCards() {
     for (let i = 0; i < gameState.cardsInSiteSlots.length; i++) {
         if (gameState.cardsInSiteSlots[i]) {
-            drawSiteCard(gameState.cardsInSiteSlots[i])
+            drawSiteCard(gameState.cardsInSiteSlots[i], 'white')
         }
     }
 }
 
-
-function drawRect(area, text = "") {
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.5';
-    ctx.fillRect(area.x, area.y, area.width, area.height);
-    ctx.strokeStyle = '#000';
-    ctx.strokeRect(area.x, area.y, area.width, area.height);
-
-    drawText(text, area.x + area.width / 2, area.y + area.height / 2)
+function drawOpponentSiteCards() {
+    for (let i = 0; i< gameState.cardsInOpponentSite.length; i++) {
+        if (gameState.cardsInOpponentSite[i]) {
+            drawSiteCard(gameState.cardsInOpponentSite[i], 'red')
+        }
+    }
 }
 
 function drawOpponentArea() {
@@ -490,7 +563,6 @@ function drawOpponentArea() {
     drawRect(opponentDiscardPile, "Discard Pile")
     drawRect(opponentHand, "Hand")
     drawRect(opponentDeck, "Deck")
-
 }
 
 function drawToken(x, y) {
@@ -508,13 +580,13 @@ function drawToken(x, y) {
 
     // 2. Glossy highlight
     ctx.beginPath();
-    ctx.ellipse(x - 15/2, y - 20/2, 20/2, 10/2, 0, 0, Math.PI * 2);
+    ctx.ellipse(x - 15 / 2, y - 20 / 2, 20 / 2, 10 / 2, 0, 0, Math.PI * 2);
     ctx.fillStyle = "rgba(255, 255, 255, 0.2)";
     ctx.fill();
 
     // 3. Hard specular reflection (optional)
     ctx.beginPath();
-    ctx.ellipse(x + 10/2, y + 10/2, 8/2, 4/2, 0, 0, Math.PI * 2);
+    ctx.ellipse(x + 10 / 2, y + 10 / 2, 8 / 2, 4 / 2, 0, 0, Math.PI * 2);
     ctx.fillStyle = "rgba(255, 255, 255, 0.05)";
     ctx.fill();
 
@@ -551,12 +623,17 @@ function draw() {
     drawDeadPile()
     // sites.
     drawSiteCards()
+    drawOpponentSiteCards()
 
     // for(let i = 0; i< 10; i++) {
     //     let rand = Math.floor(Math.random(0, 1)*50.0)
     //     let randy = Math.floor(Math.random(0, 1)*50.0)
     //     drawToken(500+ rand, 500+ randy)
     // }
+    drawOpponentCardsInPlay();
+    drawOpponentDiscardPile();
+    drawOpponentDeck();
+    drawOpponentHand();
 }
 
 // ============================================================
@@ -571,6 +648,11 @@ function isMouseOverCard(card) {
 function isMouseOverCardRotated(card) {
     return mouseX >= card.x && mouseX <= card.x + card.height &&
         mouseY >= card.y && mouseY <= card.y + card.width;
+}
+
+function mouseInSnapArea(snapArea) {
+    return mouseX >= snapArea.x && mouseX <= snapArea.x + snapArea.width &&
+        mouseY >= snapArea.y && mouseY <= snapArea.y + snapArea.height;
 }
 
 // Handle mouse down event to start dragging a card
@@ -690,6 +772,9 @@ canvas.addEventListener('mousemove', (e) => {
     gameState.cardsInSiteSlots.forEach(card => {
         if (card) { card.isHover = false; }
     });
+    gameState.cardsInOpponentPlay.forEach(card => {
+        card.isHover = false;
+    })
 
     // Check for hover mechanics.
     if (gameState.dragActive == false) {
@@ -711,7 +796,7 @@ canvas.addEventListener('mousemove', (e) => {
 
         for (let i = gameState.cardsInPlay.length - 1; i >= 0; i--) {
             let card = gameState.cardsInPlay[i];
-            if (isMouseOverCard(card)) {
+            if (card && isMouseOverCard(card)) {
                 card.isHover = true;
                 break;
             }
@@ -724,20 +809,29 @@ canvas.addEventListener('mousemove', (e) => {
                 break;
             }
         }
+
+        // Hover inspection for opponent cards.
+        for (let i = gameState.cardsInOpponentPlay.length - 1; i >= 0; i--) {
+            let card = gameState.cardsInOpponentPlay[i];
+            if (card && isMouseOverCard(card)) {
+                card.isHover = true;
+                break;
+            }
+        }
     }
     draw();
 });
 
-function cardInSnapArea(snapArea) {
-    return mouseX >= snapArea.x && mouseX <= snapArea.x + snapArea.width &&
-        mouseY >= snapArea.y && mouseY <= snapArea.y + snapArea.height;
-}
 
+
+// ================================================
+// IPC handling and sending
+// ================================================
 function handleSitePlacement(from, card) {
     for (let i = 0; i < siteSlots.length; i++) {
         let site = siteSlots[i]
-        if (cardInSnapArea(site)) {
-            return placeCardAtSite(i, card);
+        if (mouseInSnapArea(site)) {
+            return placeCardAtSite(from, card, i);
         }
     }
     console.log("Did not find site, returning")
@@ -746,11 +840,11 @@ function handleSitePlacement(from, card) {
 
 function handleGenericCardMoved(from, selectedCard) {
     // Generic handler for moving/playing cards.
-    if (cardInSnapArea(playerHand)) {
+    if (mouseInSnapArea(playerHand)) {
         placeCardInHand(from, selectedCard)
-    } else if (cardInSnapArea(discardPile)) {
+    } else if (mouseInSnapArea(discardPile)) {
         placeCardInDiscard(from, selectedCard)
-    } else if (cardInSnapArea(deadPile)) {
+    } else if (mouseInSnapArea(deadPile)) {
         placeCardInDeadPile(from, selectedCard)
     } else if (handleSitePlacement(from, selectedCard)) {
         console.log("Site place handled")
@@ -828,8 +922,8 @@ function handleSiteSlotsRelease() {
     for (let i = 0; i < gameState.cardsInSiteSlots.length; i++) {
         let card = gameState.cardsInSiteSlots[i];
         if (card && card.isDragged) {
-            handleGenericCardMoved("siteLocation", card);
-            gameState.cardsInSiteSlots[i] = null;
+            handleGenericCardMoved("site" + (i + 1), card);
+            delete gameState.cardsInSiteSlots[i];
             break;
         }
     }
@@ -884,13 +978,166 @@ document.addEventListener('cardAdded', (msg) => {
 })
 
 document.addEventListener('playerJoined', (msg) => {
-    console.log("canvas: Player joined")
+    console.log("canvas: Player joined, clearing board")
     // Create/ show opposing players info.
-})
+    gameState.cardsInOpponentPlay = [];
+    gameState.cardsInOpponentsHand = [];
+    gameState.cardsInOpponentsDiscard = [];
+    gameState.cardsInOpponentDeadPile = [];
+    gameState.cardsInOpponentDrawDeck = [];
+
+    draw();
+});
+
+function findCardFromOtherSite(eventData) {
+    for (let i =0 ; i < gameState.cardsInOpponentSite.length; i++) {
+         let existingCard = gameState.cardsInOpponentSite[i];
+         if (existingCard && existingCard.ref === eventData.cardRef) {
+             console.log("Found card at existing site");
+             delete gameState.cardsInOpponentSite[i];
+             return existingCard;
+         }
+     };
+}
+
+function findCardFromExistingPile(eventData) {
+    let pile;
+    let fromPile = eventData.fromPile;
+
+    switch (fromPile) {
+        case "playArea":
+            pile = gameState.cardsInOpponentPlay;
+            break;
+        case "playerHand":
+            pile = gameState.cardsInOpponentsHand;
+            break;
+        case "playerDiscard":
+            pile = gameState.cardsInOpponentsDiscard;
+            break;
+        case "playerDeadPile":
+            pile = gameState.cardsInOpponentDeadPile;
+            break;
+        case "playerDeck":
+            pile = gameState.cardsInOpponentDrawDeck;
+            break;
+        default:
+            if (fromPile.includes("site")) {
+                console.log("FromPile is a site, finding card from another site.")
+                return findCardFromOtherSite(eventData);
+            } else {
+                console.log("Invalid pile to search");
+            }
+            break;
+    }
+    if (pile) {
+        let card = pile.find(card => card && (card.ref === eventData.cardRef));
+        if (card) {
+            const index = pile.indexOf(card);
+            if (index !== -1) {
+                pile.splice(index, 1);
+                return card;
+            } else {
+                console.error("Found target card, but no index? Program error");
+            }
+        }
+    }
+    return null;
+}
+
+
+function commonRemoteCardAction(eventData, toPile) {
+    // Find an existing card in one of the opponents piles (based on "fromPile" tag)
+    // and place it into the target pile.
+    let existingCard = findCardFromExistingPile(eventData);
+    if (existingCard) {
+        console.log("Moving existing card(%d)", existingCard.cardRef)
+        existingCard.x = eventData.position.x;
+        existingCard.y = eventData.position.y;
+        toPile.push(existingCard);
+    } else {
+        console.log("New card played")
+        let card = initCard(eventData.cardId);
+        card.ref = eventData.cardRef; // override uuid generated ref.
+        card.x = eventData.position.x;
+        card.y = eventData.position.y;
+        toPile.push(card);
+    }
+    // Push to top of stack.
+}
+
+function handleRemotePlayAreaCard(eventData) {
+    commonRemoteCardAction(eventData, gameState.cardsInOpponentPlay);
+}
+
+function handleRemotePlayerHand(eventData) {
+    commonRemoteCardAction(eventData, gameState.cardsInOpponentsHand);
+}
+
+function handleRemotePlayerDiscard(eventData) {
+    commonRemoteCardAction(eventData, gameState.cardsInOpponentsDiscard);
+}
+
+function handleRemotePlayerDeadPile(eventData) {
+    commonRemoteCardAction(eventData, gameState.cardsInOpponentDeadPile)
+}
+
+function handleRemotePlayerSite(eventData) {
+    const siteNum = parseInt(eventData.toPile.slice("site".length));
+    let siteNumIdx = siteNum - 1;
+
+    if (siteNumIdx < 0 || siteNumIdx >= siteSlots.length) {
+        console.error("invalid site Number")
+        return;
+    }
+    if (gameState.cardsInSiteSlots[siteNumIdx] ) {
+        console.error("Card already exists in our site(%d), logic error?", siteNum)
+        return;
+    }
+    if (gameState.cardsInOpponentSite[siteNumIdx]) {
+        console.error("Card already exists for opponent in that site(%d)", siteNum);
+    }
+    // Lets check if it moved from an existing area( player Hand, etc)
+    let existingCard = findCardFromExistingPile(eventData);
+    if (existingCard) {
+        console.log("Moving existing  card(%d)", existingCard.cardRef)
+        existingCard.x = siteSlots[siteNumIdx].x
+        existingCard.y = siteSlots[siteNumIdx].y
+        gameState.cardsInOpponentSite[siteNumIdx] = existingCard;
+    } else {
+        console.log("New card played")
+        let card = initCard(eventData.cardId);
+        card.ref = eventData.cardRef; // override uuid generated ref.
+        card.x = siteSlots[siteNumIdx].x;
+        card.y = siteSlots[siteNumIdx].y
+        gameState.cardsInOpponentSite[siteNumIdx] = card;
+    }
+}
 
 document.addEventListener('remoteCardEvent', (msg) => {
-    console.log("Received a remote card ")
-}
+    console.log("Received a remote card Event : {}", msg.detail);
+    const eventData = msg.detail;
+
+    switch (eventData.toPile) {
+        case "playArea":
+            handleRemotePlayAreaCard(eventData);
+            break;
+        case "playerHand":
+            handleRemotePlayerHand(eventData);
+            break;
+        case "playerDiscard":
+            handleRemotePlayerDiscard(eventData);
+            break;
+        case "playerDeadPile":
+            handleRemotePlayerDeadPile(eventData);
+            break;
+        default:
+            if (eventData.toPile.includes("site")) {
+                handleRemotePlayerSite(eventData);
+                break;
+            }
+    }
+    draw();
+});
 
 
 // Initial draw

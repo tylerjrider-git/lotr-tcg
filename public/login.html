@@ -45,7 +45,7 @@
             margin-bottom: 5px;
         }
 
-        input {
+        .login-box input {
             padding: 10px;
             border-radius: 5px;
             border: none;
@@ -53,8 +53,18 @@
             background-color: #f0e6d2;
             color: #1e1b18;
         }
+        .login-box select {
+            font-family: 'Uncial Antiqua', cursive;
+            width: 100%;
+            padding: 0.5rem;
+            margin: 1rem 0;
+            font-size: 1rem;
+            border: 2px solid #ccc;
+            border-radius: 10px;
+            background-color: #fefefe;
+        }
 
-        button {
+        .login-box button {
             margin-top: 10px;
             padding: 10px 20px;
             font-size: 16px;
@@ -66,7 +76,7 @@
             transition: background 0.3s ease;
         }
 
-        button:hover {
+        .login-box button:hover {
             background-color: #c89d73;
         }
     </style>
@@ -82,6 +92,12 @@
             <label for="playerName">Your Name</label>
             <input type="text" id="playerName" placeholder="e.g. Elanor" />
 
+            <!-- New Deck Selection Dropdown -->
+            <select id="startingDeck">
+                <option value="" disabled selected>Select Your Deck</option>
+                <option value="Aragorn">Aragorn, Numenorian Ranger</option>
+                <option value="Gandalf">Gandalf, Servant of the Secret Fire</option>
+            </select>
             <button type="submit">Join Game</button>
         </form>
     </div>
@@ -99,7 +115,7 @@
 
             const gameID = document.getElementById("gameID").value.trim();
             const playerName = document.getElementById("playerName").value.trim();
-
+            const deck = document.getElementById('startingDeck').value.trim();
             // Simple validation
             if (!/^[A-Za-z0-9]{4}$/.test(gameID)) {
                 alert("Game ID must be a 4-character alphanumeric code.");
@@ -113,6 +129,7 @@
             // Store in localStorage
             sessionStorage.setItem("gameID", gameID);
             sessionStorage.setItem("playerName", playerName);
+            sessionStorage.setItem("deckName", deck)
 
             joinGame(gameID, playerName);
         });

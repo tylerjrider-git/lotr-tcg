@@ -98,8 +98,8 @@
         });
 
         socket.on('cardEvent', (eventData) => {
-            console.log('Received card event from opponent:', eventData);
-            document.dispatchEvent(new CustomEvent("remoteCardEvent", { detail: eventData }))
+            console.log('Received card event from opponent:', JSON.stringify(eventData));
+            document.dispatchEvent(new CustomEvent("remoteCardEvent", { detail: eventData }));
         });
 
         socket.on('playerLeft', (socketId) => {
