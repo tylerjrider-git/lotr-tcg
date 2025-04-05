@@ -97,8 +97,9 @@
             document.dispatchEvent(new CustomEvent("playerJoined", event));
         });
 
-        socket.on('gameEvent', (eventData) => {
-            console.log('Received game event:', eventData);
+        socket.on('cardEvent', (eventData) => {
+            console.log('Received card event from opponent:', eventData);
+            document.dispatchEvent(new CustomEvent("remoteCardEvent", { detail: eventData }))
         });
 
         socket.on('playerLeft', (socketId) => {
@@ -125,12 +126,11 @@
         }
 
         document.addEventListener('cardEvent', (msg) => {
-            console.log("Got a card Movement Event message: %s", msg.detail)
+            console.log("Got a card event from a custom thing: %s", msg.detail)
             const li = document.createElement('li');
             li.textContent = msg.detail;
             document.getElementById('serverLog').appendChild(li);
             socket.emit('cardEvent', msg.detail)
-
         })
     </script>
 

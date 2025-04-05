@@ -19,6 +19,7 @@ app.get("/", (req, res) => {
 games['4676'] = [ "playerId1", "playerId2", etc ]
 */
 let games = {}; // global games state.
+let currentGameId;
 
 io.on('connection', (socket) => {
 
@@ -30,8 +31,9 @@ io.on('connection', (socket) => {
     });
 
     socket.on('cardEvent', (data) => {
-        console.log("Got a card Event: %s", data);
-        socket.emit('cardEventAck', data);
+        console.log("Got a card Event: %s (gameID: %d)", JSON.stringify(data, null, 2), socket.gameId);
+        // Proxy to other client(s)
+        socket.to(socket.gameId).emit('cardEvent', data);
     })
 
     // Request to join a game.
@@ -52,6 +54,7 @@ io.on('connection', (socket) => {
         games[gameId].push( { socketId: socket.id, playerName })
 
         // Emit a gameJoined event back to user.
+        socket.gameId = gameId;
         socket.join(gameId);
         socket.emit('gameJoined', gameId);
 

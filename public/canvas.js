@@ -12,9 +12,8 @@ backgroundImage.src = 'assets/background.jpeg'
 const cardLibrary = {
     "lotrbackground": new Image()
 }
-
-
 cardLibrary["lotrbackground"].src = 'assets/Lotrbackground.png'
+
 function getCardImage(cardId) {
     // Return cached card id.
     if (cardLibrary[cardId]) {
@@ -28,7 +27,6 @@ function getCardImage(cardId) {
     return img;
 }
 
-
 // Track mouse position
 let mouseX = 0;
 let mouseY = 0;
@@ -38,15 +36,16 @@ const CARD_WIDTH = 714 / 5;
 
 const SITE_CARD_HEIGHT = 714 / 6;
 const SITE_CARD_WIDTH = 994 / 6;
-
+const MAX_CARDS_IN_HAND = 12;
 const PLAYER_HAND_OFFSET = 50;
 const CARD_PREVIEW_SHIFT = 20;
 const CARD_PREVIEW_SCALE_FACTOR = 3.0;
+const OPPONENT_HAND_OFFSET = 40
 
 // Define the "snap area" (a target area where cards should snap when dropped)
 const playerHand = {
-    x: canvas.width * 0.05, y: canvas.height - CARD_HEIGHT - 30,
-    width: canvas.width / 2, height: CARD_HEIGHT
+    x: SITE_CARD_WIDTH + 50, y: canvas.height - CARD_HEIGHT - 30,
+    width: CARD_WIDTH * 5, height: CARD_HEIGHT
 }
 
 // Define the "snap area" (a target area where cards should snap when dropped)
@@ -70,10 +69,30 @@ const siteSlot = {
     width: CARD_HEIGHT, height: CARD_WIDTH
 }
 
+// Opponent card hand areas
+const opponentDeadPile = {
+    x: SITE_CARD_WIDTH + 50, y: 30,
+    width: CARD_HEIGHT, height: CARD_WIDTH
+}
+const opponentDiscardPile = {
+    x: opponentDeadPile.x + opponentDeadPile.width + 20, y: OPPONENT_HAND_OFFSET,
+    width: CARD_WIDTH, height: CARD_HEIGHT
+}
+
+const opponentDeck = {
+    x: opponentDiscardPile.x + opponentDiscardPile.width + 20, y: OPPONENT_HAND_OFFSET,
+    width: CARD_WIDTH, height: CARD_HEIGHT
+}
+
+const opponentHand = {
+    x: opponentDeck.x + opponentDeck.width + 20, y: OPPONENT_HAND_OFFSET,
+    width: CARD_WIDTH * 4, height: CARD_HEIGHT
+}
+
 const siteSlots = [];
 for (let i = 0; i < 9; i++) {
     siteSlots.push({
-        x: deadPile.x + CARD_HEIGHT + 20,
+        x: 40,
         y: canvas.height * 0.025 + ((SITE_CARD_HEIGHT + 5) * i),
         width: SITE_CARD_WIDTH, height: SITE_CARD_HEIGHT
     });
@@ -82,13 +101,22 @@ for (let i = 0; i < 9; i++) {
 // Card object structure, top of cards is "top of stack"
 
 const gameState = {
+    playerName: "",
+    gameId: "",
+
     dragActive: false,
-    allCards: [],
+    cardsInPlay: [],
     cardsInPlayerHand: [],
     cardsInPlayerDiscard: [],
     cardsInSiteSlots: [],
     cardsInPlayerDeadPile: [],
-    cardsInDrawDeck: []
+    cardsInDrawDeck: [],
+
+    cardsInOpponentPlay: [],
+    cardsInOpponentsHand: [],
+    cardsInOpponentsDiscard: [],
+    cardsInOpponentDeadPile: [],
+    cardsInOpponentDrawDeck: [],
 }
 
 function initCard(_id) {
@@ -110,6 +138,9 @@ function initCardDeck() {
     LOTR_STARTER_DECK_ARAGORN.forEach(cardId => {
         gameState.cardsInDrawDeck.push(initCard(cardId));
     })
+
+    gameState.playerName = sessionStorage.getItem("playerName")
+    gameState.gameId = sessionStorage.getItem("gameId")
 }
 
 initCardDeck()
@@ -132,12 +163,21 @@ EVENT: One of "Card Drawn", "Card Discarded", "Card Played on Table", "Card adde
 }
 }
 */
-function sendCardMovedEvent(msg) {
-    console.log("Dispatching cardMovedEvent: %s", msg)
-    document.dispatchEvent(new CustomEvent("cardEvent", { detail: msg }));
+
+function sendCardMovedEvent(_from, _to, card) {
+    let event = {
+        type: "moveCard",
+        cardId: card.id,
+        fromPile: _from,
+        toPile: _to,
+        position: { x: Math.round(card.x), y: Math.round(card.y) }, // only relevant for in play cards.
+        playerId: gameState.playerName
+    }
+    console.log("Dispatching cardMovedEvent: %s", JSON.stringify(event, null, 2))
+    document.dispatchEvent(new CustomEvent("cardEvent", { detail: event }));
 }
 
-function placeCardInHand(card) {
+function placeCardInHand(from, card) {
     console.log("Placing %s into hand", card.id)
 
     // Snap to end of hand location
@@ -155,17 +195,17 @@ function placeCardInHand(card) {
         card.y = playerHand.y;
     }
 
-    sendCardMovedEvent(`Card Placed in Hand {card.id}`)
+    sendCardMovedEvent(from, "playerHand", card)
 }
 
-function placeCardOnPlayArea(card) {
+function placeCardOnPlayArea(from, card) {
     console.log("Removing card %s from hand", card.id)
-    gameState.allCards.push(card)
+    gameState.cardsInPlay.push(card)
 
-    sendCardMovedEvent("Card Removed from Hand" + card.id)
+    sendCardMovedEvent(from, "playArea", card)
 }
 
-function placeCardInDiscard(card) {
+function placeCardInDiscard(from, card) {
     console.log("Discarding card id:%s", card.id)
 
     gameState.cardsInPlayerDiscard.push(card)
@@ -173,10 +213,10 @@ function placeCardInDiscard(card) {
     card.x = discardPile.x;
     card.y = discardPile.y;
 
-    sendCardMovedEvent("Card Placed in Discard:" + card.id)
+    sendCardMovedEvent(from, "playerDiscard", card)
 }
 
-function placeCardInDeadPile(card) {
+function placeCardInDeadPile(from, card) {
     console.log("Adding card to dead pile")
 
     gameState.cardsInPlayerDeadPile.push(card)
@@ -184,7 +224,7 @@ function placeCardInDeadPile(card) {
     card.x = deadPile.x
     card.y = deadPile.y
 
-    sendCardMovedEvent("Card Placed in DeadPile:" + card.id)
+    sendCardMovedEvent(from, "playerDeadPile", card)
 }
 
 function placeCardAtSite(siteNum, card) {
@@ -198,8 +238,7 @@ function placeCardAtSite(siteNum, card) {
             card.x = siteSlots[siteNum].x
             card.y = siteSlots[siteNum].y
 
-            let str = "Card placed at siteNum: " + (siteNum+1) + " cardid:" + card.id
-            sendCardMovedEvent(str)
+            sendCardMovedEvent("", "siteNumber"+(siteNum + 1), card)
             return true
         }
     }
@@ -212,12 +251,12 @@ function placeCardAtSite(siteNum, card) {
 // ============================================================
 
 // Generic drawing of black text
-function drawText(text, x, y, centered= true) {
+function drawText(text, x, y, centered = true) {
     ctx.font = '10px "Uncial Antiqua", cursive'; // Set font size and type
     ctx.fillStyle = 'black'; // Set text color
     if (centered) {
         const textWidth = ctx.measureText(text).width;
-        x =  x - textWidth / 2;
+        x = x - textWidth / 2;
     }
     ctx.fillText(text, x, y); // Draw the text at position (50, 150)
 }
@@ -296,7 +335,7 @@ function drawCardPreview(card) {
 // Draw all "loose leaf" cards on the table.
 function drawCards() {
     // Draw the cards
-    gameState.allCards.forEach(card => {
+    gameState.cardsInPlay.forEach(card => {
         if (card.isHover) {
             drawCard(card)
             drawCardPreview(card)
@@ -368,14 +407,14 @@ function drawDrawDeckBorder() {
     ctx.strokeStyle = '#000';
     ctx.strokeRect(drawDeck.x, drawDeck.y, drawDeck.width, drawDeck.height);
 
-    drawText("DRAW EMPTY", drawDeck.x + drawDeck.width /2, drawDeck.y + drawDeck.height / 2)
+    drawText("DRAW EMPTY", drawDeck.x + drawDeck.width / 2, drawDeck.y + drawDeck.height / 2)
 }
 
 function drawDrawDeck() {
     let numCardsInDrawDeck = gameState.cardsInDrawDeck.length
     if (numCardsInDrawDeck > 0) {
         for (let i = 0; i < numCardsInDrawDeck; i++) {
-            gameState.cardsInDrawDeck[i].x = drawDeck.x + Math.floor(Math.sqrt(i))*2;
+            gameState.cardsInDrawDeck[i].x = drawDeck.x + Math.floor(Math.sqrt(i)) * 2;
             drawCardReverse(gameState.cardsInDrawDeck[i])
         }
     }
@@ -398,7 +437,7 @@ function drawSiteBorders() {
         ctx.strokeRect(siteSlot.x, siteSlot.y, siteSlot.width, siteSlot.height);
         i++;
         let siteName = "Site " + i;
-        drawText(siteName, siteSlot.x + siteSlot.width /2, siteSlot.y + siteSlot.height/2);
+        drawText(siteName, siteSlot.x + siteSlot.width / 2, siteSlot.y + siteSlot.height / 2);
     })
 }
 
@@ -408,7 +447,7 @@ function drawDeadPileBorder() {
     ctx.strokeStyle = '#000';
     ctx.strokeRect(deadPile.x, deadPile.y, deadPile.width, deadPile.height);
 
-    drawText("DEADPILE", deadPile.x + deadPile.width /2, deadPile.y + deadPile.height / 2)
+    drawText("DEADPILE", deadPile.x + deadPile.width / 2, deadPile.y + deadPile.height / 2)
 }
 
 function drawDeadPile() {
@@ -419,12 +458,12 @@ function drawDeadPile() {
 }
 
 function drawSiteCard(card) {
-    let siteCard = {...card}
+    let siteCard = { ...card }
     siteCard.width = SITE_CARD_HEIGHT;
     siteCard.height = SITE_CARD_WIDTH;
     drawCardRotated(siteCard, 90)
     if (siteCard.isHover) {
-        drawCardPreview(siteCard )
+        drawCardPreview(siteCard)
     }
 }
 
@@ -434,6 +473,55 @@ function drawSiteCards() {
             drawSiteCard(gameState.cardsInSiteSlots[i])
         }
     }
+}
+
+
+function drawRect(area, text = "") {
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.5';
+    ctx.fillRect(area.x, area.y, area.width, area.height);
+    ctx.strokeStyle = '#000';
+    ctx.strokeRect(area.x, area.y, area.width, area.height);
+
+    drawText(text, area.x + area.width / 2, area.y + area.height / 2)
+}
+
+function drawOpponentArea() {
+    drawRect(opponentDeadPile, "Dead Pile")
+    drawRect(opponentDiscardPile, "Discard Pile")
+    drawRect(opponentHand, "Hand")
+    drawRect(opponentDeck, "Deck")
+
+}
+
+function drawToken(x, y) {
+    const radius = 20;
+
+    // 1. Draw base with radial gradient (dark obsidian)
+    const gradient = ctx.createRadialGradient(x - 15, y - 15, 10, x, y, radius);
+    gradient.addColorStop(0, "#2f2f3d");    // light center
+    gradient.addColorStop(1, "#0a0a0f");    // dark edge
+
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 2. Glossy highlight
+    ctx.beginPath();
+    ctx.ellipse(x - 15/2, y - 20/2, 20/2, 10/2, 0, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(255, 255, 255, 0.2)";
+    ctx.fill();
+
+    // 3. Hard specular reflection (optional)
+    ctx.beginPath();
+    ctx.ellipse(x + 10/2, y + 10/2, 8/2, 4/2, 0, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(255, 255, 255, 0.05)";
+    ctx.fill();
+
+    // 4. Optional rim lighting
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = "rgba(100, 100, 150, 0.2)";
+    ctx.stroke();
 }
 
 
@@ -449,6 +537,8 @@ function draw() {
     drawSiteBorders();
     drawDeadPileBorder();
 
+    drawOpponentArea();
+
     // Draw floating cards.
     drawCards()
     // Draw cards in the hand.
@@ -461,6 +551,12 @@ function draw() {
     drawDeadPile()
     // sites.
     drawSiteCards()
+
+    // for(let i = 0; i< 10; i++) {
+    //     let rand = Math.floor(Math.random(0, 1)*50.0)
+    //     let randy = Math.floor(Math.random(0, 1)*50.0)
+    //     drawToken(500+ rand, 500+ randy)
+    // }
 }
 
 // ============================================================
@@ -474,7 +570,7 @@ function isMouseOverCard(card) {
 
 function isMouseOverCardRotated(card) {
     return mouseX >= card.x && mouseX <= card.x + card.height &&
-    mouseY >= card.y && mouseY <= card.y + card.width;
+        mouseY >= card.y && mouseY <= card.y + card.width;
 }
 
 // Handle mouse down event to start dragging a card
@@ -524,8 +620,8 @@ canvas.addEventListener('mousedown', (e) => {
         }
     };
 
-    for (let i = gameState.allCards.length - 1; i >= 0; i--) {
-        let card = gameState.allCards[i]
+    for (let i = gameState.cardsInPlay.length - 1; i >= 0; i--) {
+        let card = gameState.cardsInPlay[i]
         if (isMouseOverCard(card)) {
             card.isDragged = true;
             gameState.dragActive = true;
@@ -544,7 +640,7 @@ canvas.addEventListener('mousemove', (e) => {
 
     // Draw drag movement.
     if (gameState.dragActive) {
-        gameState.allCards.forEach(card => {
+        gameState.cardsInPlay.forEach(card => {
             if (card.isDragged) {
                 card.x = mouseX - card.width / 2;
                 card.y = mouseY - card.height / 2;
@@ -588,7 +684,7 @@ canvas.addEventListener('mousemove', (e) => {
     gameState.cardsInPlayerDiscard.forEach(card => {
         card.isHover = false;
     });
-    gameState.allCards.forEach(card => {
+    gameState.cardsInPlay.forEach(card => {
         card.isHover = false;
     });
     gameState.cardsInSiteSlots.forEach(card => {
@@ -613,8 +709,8 @@ canvas.addEventListener('mousemove', (e) => {
             }
         }
 
-        for (let i = gameState.allCards.length - 1; i >= 0; i--) {
-            let card = gameState.allCards[i];
+        for (let i = gameState.cardsInPlay.length - 1; i >= 0; i--) {
+            let card = gameState.cardsInPlay[i];
             if (isMouseOverCard(card)) {
                 card.isHover = true;
                 break;
@@ -637,7 +733,7 @@ function cardInSnapArea(snapArea) {
         mouseY >= snapArea.y && mouseY <= snapArea.y + snapArea.height;
 }
 
-function handleSitePlacement(card) {
+function handleSitePlacement(from, card) {
     for (let i = 0; i < siteSlots.length; i++) {
         let site = siteSlots[i]
         if (cardInSnapArea(site)) {
@@ -648,18 +744,18 @@ function handleSitePlacement(card) {
     return false
 }
 
-function handleGenericCardMoved(selectedCard) {
+function handleGenericCardMoved(from, selectedCard) {
     // Generic handler for moving/playing cards.
     if (cardInSnapArea(playerHand)) {
-        placeCardInHand(selectedCard)
+        placeCardInHand(from, selectedCard)
     } else if (cardInSnapArea(discardPile)) {
-        placeCardInDiscard(selectedCard)
+        placeCardInDiscard(from, selectedCard)
     } else if (cardInSnapArea(deadPile)) {
-        placeCardInDeadPile(selectedCard)
-    } else if (handleSitePlacement(selectedCard)) {
+        placeCardInDeadPile(from, selectedCard)
+    } else if (handleSitePlacement(from, selectedCard)) {
         console.log("Site place handled")
     } else {
-        placeCardOnPlayArea(selectedCard);
+        placeCardOnPlayArea(from, selectedCard);
     }
     selectedCard.isDragged = false;
     gameState.dragActive = false;
@@ -667,12 +763,12 @@ function handleGenericCardMoved(selectedCard) {
 
 function handleFreeCardMoved() {
     // Check to see if the card moved from the board "canvas" into hand.
-    for (let i = gameState.allCards.length - 1; i >= 0; i--) {
-        let card = gameState.allCards[i];
+    for (let i = gameState.cardsInPlay.length - 1; i >= 0; i--) {
+        let card = gameState.cardsInPlay[i];
         if (card.isDragged) {
-            const selectedCard = gameState.allCards.splice(i, 1)[0]; // Remove card from array
+            const selectedCard = gameState.cardsInPlay.splice(i, 1)[0]; // Remove card from array
             // Snap to the target area if it's close enough
-            handleGenericCardMoved(selectedCard)
+            handleGenericCardMoved("playArea", selectedCard)
             break
         }
     }
@@ -684,7 +780,7 @@ function handlePlayerCardMoved() {
         let card = gameState.cardsInPlayerHand[i];
         if (card.isDragged) {
             const selectedCard = gameState.cardsInPlayerHand.splice(i, 1)[0];
-            handleGenericCardMoved(selectedCard)
+            handleGenericCardMoved("playerHand", selectedCard)
             break;
         }
     }
@@ -694,11 +790,15 @@ function handlePlayerCardMoved() {
 function handleDrawDeckRelease() {
     if (gameState.cardsInDrawDeck.length > 0) {
         console.log("Checking mouse up on draw deck")
-        if (isMouseOverCard(gameState.cardsInDrawDeck[gameState.cardsInDrawDeck.length-1])) {
-            console.log("Use clicked on draw deck")
-            let randomIndex = Math.floor(Math.random() * gameState.cardsInDrawDeck.length);
-            const pulledCard = gameState.cardsInDrawDeck.splice(randomIndex, 1)[0];
-            placeCardInHand(pulledCard);
+        if (isMouseOverCard(gameState.cardsInDrawDeck[gameState.cardsInDrawDeck.length - 1])) {
+            if (gameState.cardsInPlayerHand.length < MAX_CARDS_IN_HAND) {
+                let randomIndex = Math.floor(Math.random() * gameState.cardsInDrawDeck.length);
+                const pulledCard = gameState.cardsInDrawDeck.splice(randomIndex, 1)[0];
+                placeCardInHand("playerDeck", pulledCard);
+            } else {
+                console.log("Too many cards in hand.")
+                alert("Max number of cards added")
+            }
         }
     }
 }
@@ -708,7 +808,7 @@ function handleDiscardRelease() {
         let card = gameState.cardsInPlayerDiscard[gameState.cardsInPlayerDiscard.length - 1]
         if (card.isDragged) {
             const selectedCard = gameState.cardsInPlayerDiscard.pop();
-            handleGenericCardMoved(selectedCard);
+            handleGenericCardMoved("playerDiscard", selectedCard);
         }
     }
 }
@@ -718,7 +818,7 @@ function handleDeadPileRelease() {
         let card = gameState.cardsInPlayerDeadPile[gameState.cardsInPlayerDeadPile.length - 1]
         if (card.isDragged) {
             const selectedCard = gameState.cardsInPlayerDeadPile.pop();
-            handleGenericCardMoved(selectedCard)
+            handleGenericCardMoved("playerDeadPile", selectedCard)
         }
     }
 }
@@ -728,7 +828,7 @@ function handleSiteSlotsRelease() {
     for (let i = 0; i < gameState.cardsInSiteSlots.length; i++) {
         let card = gameState.cardsInSiteSlots[i];
         if (card && card.isDragged) {
-            handleGenericCardMoved(card);
+            handleGenericCardMoved("siteLocation", card);
             gameState.cardsInSiteSlots[i] = null;
             break;
         }
@@ -739,10 +839,10 @@ canvas.addEventListener('mouseup', () => {
     // Modifying cards while looping through it?? ehh..
     handleFreeCardMoved()
     handlePlayerCardMoved()
-    handleDrawDeckRelease()
     handleDiscardRelease()
-    handleDeadPileRelease()
     handleSiteSlotsRelease()
+    handleDeadPileRelease()
+    handleDrawDeckRelease()
 
     draw();
 });
@@ -756,18 +856,18 @@ function moveStackToDrawDeck(stack) {
     }
 }
 function handleGatherAndShuffleCards() {
-    moveStackToDrawDeck(gameState.allCards)
+    moveStackToDrawDeck(gameState.cardsInPlay)
     moveStackToDrawDeck(gameState.cardsInPlayerHand)
     moveStackToDrawDeck(gameState.cardsInPlayerDiscard)
     moveStackToDrawDeck(gameState.cardsInPlayerDeadPile)
 }
 
+
+// UI and remote events:
 document.getElementById("gatherButton").addEventListener("click", () => {
     handleGatherAndShuffleCards();
     draw();
 });
-
-
 
 
 document.addEventListener('cardAdded', (msg) => {
@@ -778,7 +878,7 @@ document.addEventListener('cardAdded', (msg) => {
             width: CARD_WIDTH, height: CARD_HEIGHT,
             isDragged: false, isHover: false
         };
-        gameState.allCards.push(newCard);
+        gameState.cardsInPlay.push(newCard);
     }
     draw();
 })
@@ -787,6 +887,10 @@ document.addEventListener('playerJoined', (msg) => {
     console.log("canvas: Player joined")
     // Create/ show opposing players info.
 })
+
+document.addEventListener('remoteCardEvent', (msg) => {
+    console.log("Received a remote card ")
+}
 
 
 // Initial draw
