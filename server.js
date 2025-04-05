@@ -63,7 +63,8 @@ io.on('connection', (socket) => {
         // Emit a gameJoined event back to user.
         socket.gameId = gameId;
         socket.join(gameId);
-        socket.emit('gameJoined', gameId);
+        // send number of players too
+        socket.emit('gameJoined', { gameId: gameId, numPlayersInLobby: games[gameId].length});
 
         socket.to(gameId).emit('playerJoined', playerName)
     });

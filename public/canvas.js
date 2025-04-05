@@ -4,8 +4,9 @@ import { initializePlayerDeck } from "./decks.js";
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
+const aspectRatio = 7680 / 4320;
 canvas.width = window.innerWidth;
-canvas.height = window.innerHeight;
+canvas.height = window.innerWidth / aspectRatio;
 
 // Assets
 let backgroundImage = new Image();
@@ -137,7 +138,6 @@ function initCard(_id) {
     }
 }
 
-
 function sendGameEvent(event) {
     console.log("Dispatching gameEvent: %s", JSON.stringify(event, null, 2))
     document.dispatchEvent(new CustomEvent("gameEvent", { detail: event }));
@@ -160,7 +160,7 @@ async function initCardDeck() {
 
     let initialDeck = await initializePlayerDeck(gameState.deck)
     initialDeck.forEach(cardObj => {
-        console.log(JSON.stringify(cardObj, null, 2));
+        // console.log(JSON.stringify(cardObj, null, 2));
         gameState.cardsInDrawDeck.push(initCard(cardObj.cardId));
     })
 
@@ -171,7 +171,7 @@ await initCardDeck();
 
 
 // ============================================================
-// Card Management, needs events to me sent back to server.
+// Card Management, needs events to be sent back to server.
 // ============================================================
 
 /*
@@ -271,7 +271,18 @@ function placeCardAtSite(from, card, siteNum) {
     return false
 }
 
+// ============================================================
+// Audio/sounds
+// ============================================================
+const audioLibrary = []
+function playSound(soundEffect) {
 
+    if (!audioLibrary[soundEffect]) {
+        audioLibrary[soundEffect] = new Audio('assets/sound/' + soundEffect + ".mp3")
+    }
+    audioLibrary[soundEffect].play()
+
+}
 // ============================================================
 // Game board drawing code (probably needs to be react.js 'ified.)
 // ============================================================
@@ -425,7 +436,6 @@ function drawOpponentDiscardPile() {
 
 function drawOpponentDeck() {
     let numCardsInDrawDeck = gameState.cardsInOpponentDrawDeck.length
-    console.log("Drawing opponent deck of %d cards", numCardsInDrawDeck);
     if (numCardsInDrawDeck > 0) {
         for (let i = 0; i < numCardsInDrawDeck; i++) {
             // draw a square decreasing draw deck.
@@ -547,7 +557,6 @@ function drawDeadPile() {
     }
 }
 
-
 function drawSiteCard(card, shadowColor) {
     let siteCard = { ...card }
     siteCard.width = SITE_CARD_HEIGHT;
@@ -624,9 +633,10 @@ function draw() {
     drawDrawDeckBorder();
     drawSiteBorders();
     drawDeadPileBorder();
-
     drawOpponentArea();
 
+    // Opponent cards are "somewhat static"
+    drawOpponentSiteCards()
     // Draw floating cards.
     drawCards()
     // Draw cards in the hand.
@@ -639,7 +649,7 @@ function draw() {
     drawDeadPile()
     // sites.
     drawSiteCards()
-    drawOpponentSiteCards()
+    
 
     // for(let i = 0; i< 10; i++) {
     //     let rand = Math.floor(Math.random(0, 1)*50.0)
@@ -1174,6 +1184,7 @@ function handleOpponentDeckLoaded(eventData) {
     }
 }
 
+console.log("Setting up event listener for remoteGameEvent")
 document.addEventListener('remoteGameEvent', (msg) =>{
     console.log("received a remote game event : %s", JSON.stringify(msg.detail, null, 2));
     const eventData = msg.detail;
@@ -1189,6 +1200,10 @@ document.addEventListener('remoteGameEvent', (msg) =>{
     draw();
 })
 
+document.addEventListener('gameStarted', (msg) => {
+    console.log("Game has officially started")
+    playSound("sword-clash")
+})
 
 // Initial draw
 draw();

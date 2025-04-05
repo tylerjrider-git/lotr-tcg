@@ -32,10 +32,17 @@
 
     <h1></h1>
 
-        <canvas id="gameCanvas" width="7680" height="4320"></canvas>
-        <button id="gatherButton">Gather Board</button>
-        <style>
-            /* #gameContainer {
+    <div id="waitingPopup" class="popup">
+        <div class="popup-content">
+            <p>Waiting for another player to join...</p>
+            <div class="spinner"></div>
+        </div>
+    </div>
+
+    <canvas id="gameCanvas" width="7680" height="4320"></canvas>
+    <button id="gatherButton">Gather Board</button>
+    <style>
+        /* #gameContainer {
                 display: absolute;
                 flex-direction: column;
                 align-items: center;
@@ -51,48 +58,109 @@
                 background-color: #000;
             } */
 
-            #gatherButton {
-                margin-top: 10px;
-                padding: 10px 20px;
-                border-radius: 12px;
-                border: none;
-                background-color: #9b7653;
-                color: white;
-                font-size: 16px;
-                cursor: pointer;
-                box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
-                transition: background 0.3s;
+        #gatherButton {
+            margin-top: 10px;
+            padding: 10px 20px;
+            border-radius: 12px;
+            border: none;
+            background-color: #9b7653;
+            color: white;
+            font-size: 16px;
+            cursor: pointer;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+            transition: background 0.3s;
+        }
+
+        .popup {
+            display: none;
+            /* Hidden by default */
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            /* Semi-transparent background */
+            z-index: 9999;
+            /* Ensure it overlays the page content */
+            justify-content: center;
+            align-items: center;
+            color: white;
+        }
+
+        .popup-content {
+            background-color: rgba(0, 0, 0, 0.8);
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top: 4px solid white;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
             }
-        </style>
-        <script type="module" src="canvas.js"></script>
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+    </style>
+    <script type="module" src="canvas.js"></script>
     <!-- This sends data back to my server. -->
     <script src="/socket.io/socket.io.js"></script>
     <script>
 
+        function joinGame(gameId, playerName) {
+            console.log("Joining game from table gameID: %d", gameId);
+            socket.emit('joinGame', gameId, playerName);
+        }
+
+        function showWaitingPopup() {
+            const popup = document.getElementById('waitingPopup');
+            popup.style.display = 'flex'; // Show the popup
+        }
+        function hideWaitingPopup() {
+            const popup = document.getElementById('waitingPopup');
+            popup.style.display = 'none'; // Hide the popup
+        }
+        function startGame() {
+            hideWaitingPopup();
+            document.dispatchEvent(new CustomEvent("gameStarted", { detail : "none"}));
+        }
         const socket = io();
 
-        // Messages from server
-        socket.on('messageAck', (data) => {
-            const li = document.createElement('li');
-            li.textContent = data;
-            document.getElementById('serverLog').appendChild(li);
-        });
-
-        socket.on('cardEventAck', (msg) => {
-            console.log("cardEventAck");
-        })
-
         // Listen for events from the server
-        socket.on('gameJoined', (gameId) => {
-            console.log('Successfully joined game', gameId);
+        socket.on('gameJoined', (data) => {
+            gameId = data.gameId
+            numPlayers = data.numPlayersInLobby
+            console.log('Successfully joined gameID: %d, numPlayers:%d', gameId, numPlayers);
+            if (numPlayers >= 2) {
+                console.log("Another player is already here, lets tart")
+                startGame();
+            }
         });
+
+        let gameID = sessionStorage.getItem("gameID");
+        let playerName = sessionStorage.getItem("playerName");
+
+        joinGame(gameID, playerName);
 
         socket.on('playerJoined', (playerName) => {
             console.log(`${playerName} has joined the game.`);
             const opponentNameHeading = document.getElementById("opponentNameHeading")
             opponentNameHeading.innerText = "Opponent:" + playerName;
-            event = { "playerName": playerName}
+            event = { "playerName": playerName }
             document.dispatchEvent(new CustomEvent("playerJoined", event));
+            startGame();
         });
 
         socket.on('cardEvent', (eventData) => {
@@ -109,15 +177,7 @@
             console.log(`Player with socketId ${socketId} has left the game.`);
         });
 
-        function joinGame(gameId, playerName) {
-            console.log("Joining game from table gameID: %d", gameID);
-            socket.emit('joinGame', gameId, playerName);
-        }
-
-        let gameID = sessionStorage.getItem("gameID");
-        let playerName = sessionStorage.getItem("playerName");
-
-        joinGame(gameID, playerName);
+        showWaitingPopup();
 
         // Events from the client game.
         document.addEventListener('cardEvent', (msg) => {
