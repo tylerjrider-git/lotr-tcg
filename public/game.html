@@ -17,47 +17,104 @@
     <h1 id="loginGreeting">Welcome to the TestApp </h1>
     <input id="msg" type="text" placeholder="Enter a Card ID">
     <button onclick="sendMessage()"> Add Card To Deck</button>
-    <h2>GameId:</h2>
-    <ul id="gameId">"-"</ul>
-
+    <h2 id="gameIdHeading">GameId:</h2>
+    <h2 id="opponentNameHeading">Opponent Info:</h2>
     <script>
         window.onload = function () {
-            const playerInfo = localStorage.getItem("playerName");
-            const gameId = localStorage.getItem("gameID");
+            const playerInfo = sessionStorage.getItem("playerName");
+            const gameId = sessionStorage.getItem("gameID");
             const heading = document.getElementById("loginGreeting");
             if (playerInfo) {
                 heading.innerText = "Welcome to the LOTR TCG " + playerInfo;
             }
-            const gameIdHeading = document.getElementById("gameId")
-            gameIdHeading.innerText = gameId
-
+            const gameIdHeading = document.getElementById("gameIdHeading")
+            gameIdHeading.innerText = "GameId:" + gameId;
         };
     </script>
 
-    <!-- <input id="playerInfo" type="text" placeholder="What is your player name?">
-    <button onclick="updatePlayerInfo()"> Send</button>
-    <script>
-        function updatePlayerInfo() {
-            const info = document.getElementById('playerInfo').value;
-            console.log("Player entered information ok");
-            socket.emit('playerInfoUpdated', info);
-            localStorage.setItem("playerInfo", info);
-        }
-    </script> -->
-
     <h1></h1>
-    <canvas id="gameCanvas" width="7680" height="4320"></canvas>
-    <script src="canvas.js"></script>
 
+        <canvas id="gameCanvas" width="7680" height="4320"></canvas>
+        <button id="gatherButton">Gather Board</button>
+        <style>
+            /* #gameContainer {
+                display: absolute;
+                flex-direction: column;
+                align-items: center;
+                height: 100vh;
+                justify-content: flex-start;
+            }
+
+            #gameCanvas {
+                display: absolute;
+                width: 100%;
+                height: calc(100vh);
+                display: block;
+                background-color: #000;
+            } */
+
+            #gatherButton {
+                margin-top: 10px;
+                padding: 10px 20px;
+                border-radius: 12px;
+                border: none;
+                background-color: #9b7653;
+                color: white;
+                font-size: 16px;
+                cursor: pointer;
+                box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+                transition: background 0.3s;
+            }
+        </style>
+        <script type="module" src="canvas.js"></script>
     <!-- This sends data back to my server. -->
     <script src="/socket.io/socket.io.js"></script>
     <script>
+
         const socket = io();
+
+        // Socket handler functions
         socket.on('messageAck', (data) => {
             const li = document.createElement('li');
             li.textContent = data;
             document.getElementById('serverLog').appendChild(li);
         });
+
+        socket.on('cardEventAck', (msg) => {
+            console.log("cardEventAck");
+        })
+
+        // Listen for events from the server
+        socket.on('gameJoined', (gameId) => {
+            console.log('Successfully joined game', gameId);
+        });
+
+        socket.on('playerJoined', (playerName) => {
+            console.log(`${playerName} has joined the game.`);
+            const opponentNameHeading = document.getElementById("opponentNameHeading")
+            opponentNameHeading.innerText = "Opponent:" + playerName;
+            event = { "playerName": playerName}
+            document.dispatchEvent(new CustomEvent("playerJoined", event));
+        });
+
+        socket.on('gameEvent', (eventData) => {
+            console.log('Received game event:', eventData);
+        });
+
+        socket.on('playerLeft', (socketId) => {
+            console.log(`Player with socketId ${socketId} has left the game.`);
+        });
+
+        function joinGame(gameId, playerName) {
+            console.log("Joining game from table gameID: %d", gameID);
+            socket.emit('joinGame', gameId, playerName);
+        }
+
+
+        let gameID = sessionStorage.getItem("gameID");
+        let playerName = sessionStorage.getItem("playerName");
+
+        joinGame(gameID, playerName);
 
         function sendMessage() {
             const msg = document.getElementById('msg').value;
@@ -73,13 +130,8 @@
             li.textContent = msg.detail;
             document.getElementById('serverLog').appendChild(li);
             socket.emit('cardEvent', msg.detail)
-        })
-
-        socket.on('cardEventAck', (msg) => {
-            console.log("cardEventAck");
 
         })
-
     </script>
 
     <h2>ServerLog:</h2>
