@@ -138,6 +138,19 @@ function initCard(_id) {
 }
 
 
+function sendGameEvent(event) {
+    console.log("Dispatching gameEvent: %s", JSON.stringify(event, null, 2))
+    document.dispatchEvent(new CustomEvent("gameEvent", { detail: event }));
+}
+
+function sendDeckInitialized(deckSize) {
+    let deckLoadedEvent = {
+        type : "deckInitialized",
+        deckSize : deckSize,
+    }
+    sendGameEvent(deckLoadedEvent)
+}
+
 async function initCardDeck() {
     // Load from starter deck.
     // E.g. csv.lines.forEach({cardsInDrawDeck.push(initCard(line))})
@@ -145,15 +158,17 @@ async function initCardDeck() {
     gameState.gameId = sessionStorage.getItem("gameId")
     gameState.deck = sessionStorage.getItem("deckName")
 
-    
     let initialDeck = await initializePlayerDeck(gameState.deck)
     initialDeck.forEach(cardObj => {
         console.log(JSON.stringify(cardObj, null, 2));
         gameState.cardsInDrawDeck.push(initCard(cardObj.cardId));
     })
+
+    sendDeckInitialized(initialDeck.length)
 }
 
 await initCardDeck();
+
 
 // ============================================================
 // Card Management, needs events to me sent back to server.
@@ -410,6 +425,7 @@ function drawOpponentDiscardPile() {
 
 function drawOpponentDeck() {
     let numCardsInDrawDeck = gameState.cardsInOpponentDrawDeck.length
+    console.log("Drawing opponent deck of %d cards", numCardsInDrawDeck);
     if (numCardsInDrawDeck > 0) {
         for (let i = 0; i < numCardsInDrawDeck; i++) {
             // draw a square decreasing draw deck.
@@ -957,38 +973,9 @@ function handleGatherAndShuffleCards() {
 }
 
 
-// UI and remote events:
-document.getElementById("gatherButton").addEventListener("click", () => {
-    handleGatherAndShuffleCards();
-    draw();
-});
-
-
-document.addEventListener('cardAdded', (msg) => {
-    console.log("Got a card added event message: %s", msg.detail)
-    if (cardLibrary[msg.detail]) {
-        let newCard = {
-            id: msg.detail, x: 50, y: 50, z: 0,
-            width: CARD_WIDTH, height: CARD_HEIGHT,
-            isDragged: false, isHover: false
-        };
-        gameState.cardsInPlay.push(newCard);
-    }
-    draw();
-})
-
-document.addEventListener('playerJoined', (msg) => {
-    console.log("canvas: Player joined, clearing board")
-    // Create/ show opposing players info.
-    gameState.cardsInOpponentPlay = [];
-    gameState.cardsInOpponentsHand = [];
-    gameState.cardsInOpponentsDiscard = [];
-    gameState.cardsInOpponentDeadPile = [];
-    gameState.cardsInOpponentDrawDeck = [];
-
-    draw();
-});
-
+//
+// Handle opponent card moves
+//
 function findCardFromOtherSite(eventData) {
     for (let i =0 ; i < gameState.cardsInOpponentSite.length; i++) {
          let existingCard = gameState.cardsInOpponentSite[i];
@@ -1113,6 +1100,44 @@ function handleRemotePlayerSite(eventData) {
     }
 }
 
+// ========================================================
+// Remote events.
+// ========================================================
+// UI and remote events:
+document.getElementById("gatherButton").addEventListener("click", () => {
+    handleGatherAndShuffleCards();
+    draw();
+});
+
+document.addEventListener('cardAdded', (msg) => {
+    console.log("Got a card added event message: %s", msg.detail)
+    if (cardLibrary[msg.detail]) {
+        let newCard = {
+            id: msg.detail, x: 50, y: 50, z: 0,
+            width: CARD_WIDTH, height: CARD_HEIGHT,
+            isDragged: false, isHover: false
+        };
+        gameState.cardsInPlay.push(newCard);
+    }
+    draw();
+})
+
+document.addEventListener('playerJoined', (playerName, deckSize) => {
+    console.log("canvas: Player joined(%s), clearing board, starting Deck is :%d", playerName, deckSize)
+    // Create/ show opposing players info.
+    gameState.cardsInOpponentPlay = [];
+    gameState.cardsInOpponentsHand = [];
+    gameState.cardsInOpponentsDiscard = [];
+    gameState.cardsInOpponentDeadPile = [];
+    gameState.cardsInOpponentDrawDeck = [];
+
+    // Probably _not_ the best place to send this event, likely want a SM.
+    sendDeckInitialized(gameState.cardsInDrawDeck.length);
+
+    draw();
+});
+
+
 document.addEventListener('remoteCardEvent', (msg) => {
     console.log("Received a remote card Event : {}", msg.detail);
     const eventData = msg.detail;
@@ -1138,6 +1163,31 @@ document.addEventListener('remoteCardEvent', (msg) => {
     }
     draw();
 });
+
+function handleOpponentDeckLoaded(eventData) {
+    // probably a better way to do this.
+    console.log("Lazily initializing opponent draw deck")
+    let placeHolder =  initCard("LOTR-0000");
+    placeHolder.ref = 0;
+    for (let i = 0; i < eventData.deckSize; i++) {
+        gameState.cardsInOpponentDrawDeck.push(placeHolder);
+    }
+}
+
+document.addEventListener('remoteGameEvent', (msg) =>{
+    console.log("received a remote game event : %s", JSON.stringify(msg.detail, null, 2));
+    const eventData = msg.detail;
+
+    switch(eventData.type) {
+        case "deckInitialized":
+            handleOpponentDeckLoaded(eventData);
+            break;
+        default:
+            console.error("Unhandled gameEvent: %s", eventData.type)
+            break;
+    }
+    draw();
+})
 
 
 // Initial draw

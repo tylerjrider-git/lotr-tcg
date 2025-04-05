@@ -74,7 +74,6 @@ async function initializePlayerDeck(deckName) {
                 "cardSiteNum": values[5].trim()
             }
         });
-        console.log("Returning objects:", JSON.stringify(objects, 2, null));
         return objects;
     } catch(err) {
         alert("Error reading in CSV:", err);

@@ -15,8 +15,6 @@
 
 <body>
     <h1 id="loginGreeting">Welcome to the TestApp </h1>
-    <input id="msg" type="text" placeholder="Enter a Card ID">
-    <button onclick="sendMessage()"> Add Card To Deck</button>
     <h2 id="gameIdHeading">GameId:</h2>
     <h2 id="opponentNameHeading">Opponent Info:</h2>
     <script>
@@ -73,7 +71,7 @@
 
         const socket = io();
 
-        // Socket handler functions
+        // Messages from server
         socket.on('messageAck', (data) => {
             const li = document.createElement('li');
             li.textContent = data;
@@ -98,9 +96,14 @@
         });
 
         socket.on('cardEvent', (eventData) => {
-            console.log('Received card event from opponent:', JSON.stringify(eventData));
+            console.log('Received card event from opponent:', JSON.stringify(eventData, null, 2));
             document.dispatchEvent(new CustomEvent("remoteCardEvent", { detail: eventData }));
         });
+
+        socket.on('gameEvent', (eventData) => {
+            console.log('Received game event from opponent:', JSON.stringify(eventData, null, 2));
+            document.dispatchEvent(new CustomEvent("remoteGameEvent", { detail: eventData }));
+        })
 
         socket.on('playerLeft', (socketId) => {
             console.log(`Player with socketId ${socketId} has left the game.`);
@@ -111,26 +114,23 @@
             socket.emit('joinGame', gameId, playerName);
         }
 
-
         let gameID = sessionStorage.getItem("gameID");
         let playerName = sessionStorage.getItem("playerName");
 
         joinGame(gameID, playerName);
 
-        function sendMessage() {
-            const msg = document.getElementById('msg').value;
-            socket.emit('message', msg);
-
-            console.log("Sending message across document")
-            document.dispatchEvent(new CustomEvent("cardAdded", { detail: msg }));
-        }
-
+        // Events from the client game.
         document.addEventListener('cardEvent', (msg) => {
-            console.log("Got a card event from a custom thing: %s", msg.detail)
+            console.log("Got a card event info: %s", msg.detail)
             const li = document.createElement('li');
             li.textContent = msg.detail;
             document.getElementById('serverLog').appendChild(li);
             socket.emit('cardEvent', msg.detail)
+        })
+
+        document.addEventListener('gameEvent', (msg) => {
+            console.log("Got a game event info: %s", msg.detail)
+            socket.emit('gameEvent', msg.detail)
         })
     </script>
 

@@ -34,7 +34,14 @@ io.on('connection', (socket) => {
         console.log("Got a card Event: %s (gameID: %d)", JSON.stringify(data, null, 2), socket.gameId);
         // Proxy to other client(s)
         socket.to(socket.gameId).emit('cardEvent', data);
-    })
+    });
+
+    // Broadcast to "room" the eventInformation
+    socket.on('gameEvent', (eventData) => {
+        console.log("Forwarding game event from %s to others in %s",
+            socket.id, socket.gameId);
+        socket.to(socket.gameId).emit('gameEvent', eventData);
+    });
 
     // Request to join a game.
     socket.on('joinGame', (gameId, playerName) => {
@@ -51,7 +58,7 @@ io.on('connection', (socket) => {
             return;
         }
         // Add user to game.
-        games[gameId].push( { socketId: socket.id, playerName })
+        games[gameId].push({ socketId: socket.id, playerName })
 
         // Emit a gameJoined event back to user.
         socket.gameId = gameId;
@@ -61,20 +68,15 @@ io.on('connection', (socket) => {
         socket.to(gameId).emit('playerJoined', playerName)
     });
 
-    // Broadcast to "room" the eventInformation
-    socket.on('gameEvent', (gameId, eventData) => {
-        console.log("Forwarding game event from %s to others in %s",
-            socket.id, gameId);
-        socket.to(gameId).emit('gameEvent', eventData);
-    });
+
 
     socket.on('disconnect', () => {
         console.log('User disconnected:', socket.id);
 
-          // Find and remove the player from their game
-          for (let gameId in games) {
+        // Find and remove the player from their game
+        for (let gameId in games) {
             games[gameId] = games[gameId].filter(player => player.socketId !== socket.id);
-            
+
             // If this was the last player in the game, delete the game
             if (games[gameId].length === 0) {
                 delete games[gameId];
