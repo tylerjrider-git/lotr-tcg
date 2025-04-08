@@ -5,6 +5,8 @@ const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
 const aspectRatio = 7680 / 4320;
+const BASE_HEIGHT = 4320;
+const BASE_WIDTH = 7680;
 canvas.width = window.innerWidth;
 canvas.height = window.innerWidth / aspectRatio;
 
@@ -33,6 +35,7 @@ function getCardImage(cardId) {
 let mouseX = 0;
 let mouseY = 0;
 
+// base scale coordinates in percentages?
 const CARD_HEIGHT = 994 / 5;
 const CARD_WIDTH = 714 / 5;
 
@@ -66,11 +69,15 @@ const deadPile = {
     width: CARD_HEIGHT, height: CARD_WIDTH
 }
 
-const siteSlot = {
-    x: 0, y: 0,
-    width: CARD_HEIGHT, height: CARD_WIDTH
+const supportZone = {
+    x: playerHand.x, y: playerHand.y - (CARD_HEIGHT+5),
+    width: playerHand.width, height: playerHand.height
 }
 
+const companionZone = {
+    x: supportZone.x, y: supportZone.y - (CARD_HEIGHT+ 5),
+    width: supportZone.width, height: supportZone.height
+}
 // Opponent card hand areas
 const opponentDeadPile = {
     x: SITE_CARD_WIDTH + 50, y: 30,
@@ -99,6 +106,7 @@ for (let i = 0; i < 9; i++) {
         width: SITE_CARD_WIDTH, height: SITE_CARD_HEIGHT
     });
 }
+
 
 // Card object structure, top of cards is "top of stack"
 
@@ -286,6 +294,14 @@ function playSound(soundEffect) {
 // ============================================================
 // Game board drawing code (probably needs to be react.js 'ified.)
 // ============================================================
+function getScale() {
+    return { x: 1.0, y: 1.0 };
+    return {
+        x: canvas.width / BASE_WIDTH,
+        y: canvas.height / BASE_HEIGHT,
+    }
+
+}
 
 // Generic drawing of black text
 function drawText(text, x, y, centered = true) {
@@ -306,12 +322,21 @@ function drawCardText(text, x, y) {
 }
 
 function drawRect(area, text = "") {
+    const scale = getScale();
+    let x = area.x * scale.x;
+    let y = area.y * scale.y;
+    //let width = area.width * scale.width;
+    //let height = area.height * scale.height;
+    let width = area.width;
+    let height = area.height;
+    console.log("Drawing zone(%s) @ (%d, %d+%d+%d)", text,         x,y ,width ,height);
+   
     ctx.fillStyle = 'rgba(255, 255, 255, 0.5';
-    ctx.fillRect(area.x, area.y, area.width, area.height);
+    ctx.fillRect(x, y, width, height);
     ctx.strokeStyle = '#000';
-    ctx.strokeRect(area.x, area.y, area.width, area.height);
+    ctx.strokeRect(x, y, width, height);
 
-    drawText(text, area.x + area.width / 2, area.y + area.height / 2)
+    drawText(text, x + width / 2, y + height / 2)
 }
 
 // Draw the actual card based on its position/motion/animation info.
@@ -388,7 +413,7 @@ function drawCardPreview(card, drawUnder = false) {
 }
 
 // Draw all "loose leaf" cards on the table.
-function drawCards() {
+function drawInPlayCards() {
     // Draw the cards
     gameState.cardsInPlay.forEach(card => {
         if (card.isHover) {
@@ -486,9 +511,7 @@ function drawPlayerHand() {
     drawText("Number of Cards in Hand : " + gameState.cardsInPlayerHand.length, playerHand.x, playerHand.y + CARD_HEIGHT)
 }
 
-function drawDiscardPileBorder() {
-    drawRect(discardPile, "DISCARD");
-}
+
 
 function drawDiscardPile() {
     let numCardsInDiscard = gameState.cardsInPlayerDiscard.length
@@ -506,11 +529,17 @@ function drawDiscardPile() {
     }
 }
 
+
+function drawDiscardPileBorder() {
+    drawRect(discardPile, "DISCARD");
+}
 // Yes... draw the "Draw" deck.. TODO, rename draw->  render?
 function drawDrawDeckBorder() {
-    drawRect("DRAW EMPTY", drawDeck)
+    drawRect(drawDeck, "DRAW EMPTY");
 }
-
+function drawDeadPileBorder() {
+    drawRect(deadPile, "DEADPILE")
+}
 function drawDrawDeck() {
     let numCardsInDrawDeck = gameState.cardsInDrawDeck.length
     if (numCardsInDrawDeck > 0) {
@@ -528,6 +557,8 @@ function drawBackground() {
     }
 }
 
+
+
 function drawSiteBorders() {
     let i = 0;
     siteSlots.forEach(siteSlot => {
@@ -541,14 +572,7 @@ function drawSiteBorders() {
     })
 }
 
-function drawDeadPileBorder() {
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.5';
-    ctx.fillRect(deadPile.x, deadPile.y, deadPile.width, deadPile.height);
-    ctx.strokeStyle = '#000';
-    ctx.strokeRect(deadPile.x, deadPile.y, deadPile.width, deadPile.height);
 
-    drawText("DEADPILE", deadPile.x + deadPile.width / 2, deadPile.y + deadPile.height / 2)
-}
 
 function drawDeadPile() {
     let numCardsInDeadPile = gameState.cardsInPlayerDeadPile.length
@@ -590,44 +614,17 @@ function drawOpponentArea() {
     drawRect(opponentDeck, "Deck")
 }
 
-function drawToken(x, y) {
-    const radius = 20;
-
-    // 1. Draw base with radial gradient (dark obsidian)
-    const gradient = ctx.createRadialGradient(x - 15, y - 15, 10, x, y, radius);
-    gradient.addColorStop(0, "#2f2f3d");    // light center
-    gradient.addColorStop(1, "#0a0a0f");    // dark edge
-
-    ctx.fillStyle = gradient;
-    ctx.beginPath();
-    ctx.arc(x, y, radius, 0, Math.PI * 2);
-    ctx.fill();
-
-    // 2. Glossy highlight
-    ctx.beginPath();
-    ctx.ellipse(x - 15 / 2, y - 20 / 2, 20 / 2, 10 / 2, 0, 0, Math.PI * 2);
-    ctx.fillStyle = "rgba(255, 255, 255, 0.2)";
-    ctx.fill();
-
-    // 3. Hard specular reflection (optional)
-    ctx.beginPath();
-    ctx.ellipse(x + 10 / 2, y + 10 / 2, 8 / 2, 4 / 2, 0, 0, Math.PI * 2);
-    ctx.fillStyle = "rgba(255, 255, 255, 0.05)";
-    ctx.fill();
-
-    // 4. Optional rim lighting
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = "rgba(100, 100, 150, 0.2)";
-    ctx.stroke();
+function drawCompanionZone() {
+    // TODO Flexible drawing.
+    drawRect(companionZone, "Place Companions Here");
 }
 
+function drawSupportZone() {
+     drawRect(supportZone, "Place support cards here")
+}
 
-function draw() {
-    // Draw background image (TODO change each game or add option to change.)
-    drawBackground();
-    // Draw static images.
-    //    drawPlayerHandBorder()
-
+function drawStaticSnapZones() {
+    drawCompanionZone();
     drawPlayerHandGradient();
     drawDiscardPileBorder();
     drawDrawDeckBorder();
@@ -635,10 +632,15 @@ function draw() {
     drawDeadPileBorder();
     drawOpponentArea();
 
+    //drawCompanionZone();
+    drawSupportZone();
+}
+
+function drawCards() {
     // Opponent cards are "somewhat static"
     drawOpponentSiteCards()
     // Draw floating cards.
-    drawCards()
+    drawInPlayCards()
     // Draw cards in the hand.
     drawPlayerHand()
     // Draw top of discard
@@ -649,17 +651,24 @@ function draw() {
     drawDeadPile()
     // sites.
     drawSiteCards()
-    
+}
 
-    // for(let i = 0; i< 10; i++) {
-    //     let rand = Math.floor(Math.random(0, 1)*50.0)
-    //     let randy = Math.floor(Math.random(0, 1)*50.0)
-    //     drawToken(500+ rand, 500+ randy)
-    // }
+function drawOpponentCards() {
     drawOpponentCardsInPlay();
     drawOpponentDiscardPile();
     drawOpponentDeck();
     drawOpponentHand();
+}
+function draw() {
+    // Draw background image (TODO change each game or add option to change.)
+    drawBackground();
+    // Draw static images.
+    //    drawPlayerHandBorder()
+
+
+    drawStaticSnapZones();
+    drawCards();
+    drawOpponentCards();
 }
 
 // ============================================================
@@ -1202,7 +1211,7 @@ document.addEventListener('remoteGameEvent', (msg) =>{
 
 document.addEventListener('gameStarted', (msg) => {
     console.log("Game has officially started")
-    playSound("sword-clash")
+    // playSound("sword-clash")
 })
 
 // Initial draw
