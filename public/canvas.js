@@ -51,82 +51,30 @@ const MAX_CARDS_IN_HAND = 12;
 const CARD_SCALE = 0.8;
 const CARD_WIDTH = 0.085 * CARD_SCALE;
 const CARD_HEIGHT = 0.20 * CARD_SCALE;
-
-const SITE_CARD_X = 0.030;
-const SITE_CARD_Y = 0.030;
-
-const SITE_CARD_WIDTH = .1;
-const SITE_CARD_HEIGHT = .105;
-
-const PLAYER_HAND_OFFSET = 0.025;
+const PLAYER_HAND_OFFSET = 0.015;
 const CARD_PREVIEW_SHIFT = 0.02;
 const CARD_PREVIEW_SCALE_FACTOR = 3.0;
 const GAP = 0.005;
-const OPPONENT_HAND_OFFSET = 0.05;
 const DRAW_DECK_SHIFT = 0.0025;
 const DRAG_THRESHOLD = 0.015;
-
-
 // Define the "snap area" (a target area where cards should snap when dropped)
-const playerHand = {
-    x: 0.25, y: 1.0 - (CARD_HEIGHT + .015),
-    width: CARD_WIDTH * 5, height: CARD_HEIGHT
-}
 
-// Define the "snap area" (a target area where cards should snap when dropped)
-const drawDeck = {
-    x: playerHand.x + playerHand.width + GAP, y: playerHand.y,
-    width: CARD_WIDTH, height: CARD_HEIGHT
-}
+import * as Layout from "./layout.js"
 
-const discardPile = {
-    x: drawDeck.x + drawDeck.width + GAP, y: playerHand.y,
-    width: CARD_WIDTH, height: CARD_HEIGHT
-}
+const supportZone = Layout.supportZone;
+const playerHand = Layout.playerHand;
+const drawDeck = Layout.drawDeck;
 
-const deadPile = {
-    x: discardPile.x + discardPile.width + GAP, y: playerHand.y,
-    width: SITE_CARD_WIDTH, height: SITE_CARD_HEIGHT
-}
-
-const supportZone = {
-    x: playerHand.x, y: playerHand.y - (CARD_HEIGHT + GAP),
-    width: playerHand.width, height: playerHand.height
-}
-
-const companionZone = {
-    x: supportZone.x, y: supportZone.y - (CARD_HEIGHT + GAP),
-    width: playerHand.width, height: playerHand.height
-}
-// Opponent card hand areas
-const opponentDeadPile = {
-    x: SITE_CARD_WIDTH + GAP, y: 30,
-    width: SITE_CARD_WIDTH, height: SITE_CARD_HEIGHT
-}
-const opponentDiscardPile = {
-    x: opponentDeadPile.x + opponentDeadPile.width + GAP, y: OPPONENT_HAND_OFFSET,
-    width: CARD_WIDTH, height: CARD_HEIGHT
-}
-
-const opponentDeck = {
-    x: opponentDiscardPile.x + opponentDiscardPile.width + GAP, y: OPPONENT_HAND_OFFSET,
-    width: CARD_WIDTH, height: CARD_HEIGHT
-}
-
-const opponentHand = {
-    x: opponentDeck.x + opponentDeck.width + GAP, y: OPPONENT_HAND_OFFSET,
-    width: CARD_WIDTH * 4, height: CARD_HEIGHT
-}
-
-const siteSlots = [];
-for (let i = 0; i < 9; i++) {
-    siteSlots.push({
-        x: SITE_CARD_X,
-        y: SITE_CARD_Y + ((SITE_CARD_HEIGHT) * i),
-        width: SITE_CARD_WIDTH, height: SITE_CARD_HEIGHT
-    });
-}
-
+const discardPile = Layout.discardPile;
+const companionZone = Layout.companionZone;
+const deadPile = Layout.deadPile;
+const opponentDeadPile = Layout.opponentDeadPile;
+const opponentDiscardPile = Layout.opponentDiscardPile;
+const opponentDeck = Layout.opponentDeck;
+const opponentHand = Layout.opponentHand;
+const opponentSupportZone = Layout.opponentSupportZone;
+const opponentCompanionZone = Layout.opponentCompanionZone;
+const siteSlots = Layout.siteSlots;
 
 // Card object structure, top of cards is "top of stack"
 const uiState = {
@@ -320,11 +268,10 @@ function drawCard(card, shadowColor = null) {
         }
     }
     let cardText = "Card id:" + card.id + "card ref:" + card.ref
-    drawCardText(cardText, x + w / 2, y + h / 2)
+    //drawCardText(cardText, x + w / 2, y + h / 2)
 }
 
 function drawCardRotated(card, angle, shadowColor = null) {
-    console.log("Drawing rotated site")
     const cardImage = getCardImage(card.id);
     const x = card.x * canvas.width;
     const y = card.y * canvas.height;
@@ -400,30 +347,7 @@ function drawSpreadPile(pile) {
 // ============================================================
 
 // Player Borders
-function drawDiscardPileBorder() {
-    drawRect(discardPile, "DISCARD");
-}
 
-function drawDrawDeckBorder() {
-    drawRect(drawDeck, "DRAW EMPTY");
-}
-
-function drawDeadPileBorder() {
-    drawRect(deadPile, "DEADPILE")
-}
-
-function drawPlayerHandGradient() {
-    drawGradientRect(playerHand, "PLAYER HAND")
-}
-
-function drawCompanionZone() {
-    // TODO Flexible drawing.
-    drawRect(companionZone, "Place Companions Here");
-}
-
-function drawSupportZone() {
-    drawRect(supportZone, "Place support cards here")
-}
 
 function drawSiteBorders() {
     let i = 0;
@@ -459,6 +383,7 @@ function drawPlayerSupportArea() {
 }
 
 function drawPlayerCompanionArea() {
+    // cardsInCompanionSlots should be "slots", and each have sub attachments.
     drawSpreadPile(gameState.cardsInCompanionSlots)
 }
 
@@ -583,24 +508,43 @@ function drawOpponentSiteCards() {
     }
 }
 
+function drawDiscardPreview() {
+    const discardPreviewArea = { x: 0.10, y: 0.10, width: 0.80, height: 0.70 }
+    drawRect(discardPreviewArea, "Discard Pile here", 'rgba (127, 127, 127, 0.8');
+
+    const numCardsInDiscard = gameState.cardsInPlayerDiscard.length;
+    for (let i = 0; i < numCardsInDiscard; i++) {
+        let card = gameState.cardsInPlayerDiscard[i];
+        card.x = discardPreviewArea.x + (i % 10) * CARD_WIDTH;
+        card.y = discardPreviewArea.y + Math.floor(i / 10) * CARD_HEIGHT;
+        if (card.isHover) {
+            let offsetCard = { ...card }
+            offsetCard.y = card.y + CARD_PREVIEW_SHIFT;
+            drawCard(offsetCard)
+            drawCardPreview(offsetCard, true)
+        } else {
+            drawCard(card);
+        }
+    }
+}
+
 function drawOpponentArea() {
     drawRect(opponentDeadPile, "Dead Pile")
     drawRect(opponentDiscardPile, "Discard Pile")
     drawRect(opponentHand, "Hand")
     drawRect(opponentDeck, "Deck")
+    drawRect(opponentCompanionZone, "Companion")
+    drawRect(opponentSupportZone, "Support")
 }
-
-
 
 function drawStaticSnapZones() {
     drawSiteBorders();
-    drawCompanionZone();
-    drawSupportZone();
-    drawPlayerHandGradient();
-    drawDiscardPileBorder();
-    drawDrawDeckBorder();
-
-    drawDeadPileBorder();
+    drawRect(companionZone, "Place Companions Here");
+    drawRect(supportZone, "Place support cards here")
+    drawGradientRect(playerHand, "PLAYER HAND")
+    drawRect(discardPile, "DISCARD");
+    drawRect(drawDeck, "DRAW EMPTY");
+    drawRect(deadPile, "DEADPILE");
     drawOpponentArea();
 }
 
@@ -630,25 +574,7 @@ function drawOpponentCards() {
     drawOpponentSiteCards();
 }
 
-function drawDiscardPreview() {
-    let discardPreviewArea = { x: 0.10, y: 0.10, width: 0.80, height: 0.70 }
-    drawRect(discardPreviewArea, "Discard Pile here", 'rgba (127, 127, 127, 0.9');
 
-    let numCardsInDiscard = gameState.cardsInPlayerDiscard.length;
-    for (let i = 0; i < numCardsInDiscard; i++) {
-        let card = gameState.cardsInPlayerDiscard[i];
-        card.x = discardPreviewArea.x + (i % 10) * CARD_WIDTH;
-        card.y = discardPreviewArea.y + Math.floor(i / 10) * CARD_HEIGHT;
-        if (card.isHover) {
-            let offsetCard = { ...card }
-            offsetCard.y = card.y + CARD_PREVIEW_SHIFT;
-            drawCard(offsetCard)
-            drawCardPreview(offsetCard, true)
-        } else {
-            drawCard(card);
-        }
-    }
-}
 
 function drawPopups() {
     if (uiState.discardPreviewActive) {
@@ -720,16 +646,12 @@ function placeCardInHand(from, card) {
         card.x = playerHand.x + i * PLAYER_HAND_OFFSET;
         card.y = playerHand.y;
     }
-
-
     sendCardMovedEvent(from, "playerHand", card)
 }
 
 function placeCardOnPlayArea(from, card) {
     console.log("Moving card onto table id:%s", card.id)
     gameState.cardsInPlay.push(card)
-
-
     sendCardMovedEvent(from, "playArea", card)
 }
 
@@ -765,7 +687,6 @@ function placeCardAtSite(from, card, siteNum) {
             gameState.cardsInSiteSlots[siteNum] = card;
             card.x = siteSlots[siteNum].x
             card.y = siteSlots[siteNum].y
-
             sendCardMovedEvent(from, "site" + (siteNum + 1), card)
             return true
         }
@@ -793,7 +714,7 @@ function placeCardInSupportPile(from, card) {
     // Reshuffle/organize playerhand
     for (let i = numCardsInPile; i >= 0; i--) {
         let card = gameState.cardsInSupportArea[i];
-        card.x = supportZone.x + 2 * i * PLAYER_HAND_OFFSET;
+        card.x = supportZone.x + i * PLAYER_HAND_OFFSET;
         card.y = supportZone.y;
     }
 
@@ -810,7 +731,7 @@ function placeCardInCompanionPile(from, card) {
     // Reshuffle/organize playerhand
     for (let i = numCardsInPile; i >= 0; i--) {
         let card = gameState.cardsInCompanionSlots[i];
-        card.x = companionZone.x + 2 * i * PLAYER_HAND_OFFSET;
+        card.x = companionZone.x + i*CARD_WIDTH;
         card.y = companionZone.y;
     }
 
@@ -1194,9 +1115,11 @@ function handleRemotePlayerSite(eventData) {
 function moveStackToDrawDeck(stack) {
     while (stack.length > 0) {
         let card = stack.pop();
-        card.x = drawDeck.x;
-        card.y = drawDeck.y;
-        gameState.cardsInDrawDeck.push(card);
+        if (card) {
+            card.x = drawDeck.x;
+            card.y = drawDeck.y;
+            gameState.cardsInDrawDeck.push(card);
+        }
     }
 }
 function handleGatherAndShuffleCards() {
@@ -1206,7 +1129,9 @@ function handleGatherAndShuffleCards() {
     moveStackToDrawDeck(gameState.cardsInPlayerDeadPile)
     moveStackToDrawDeck(gameState.cardsInSupportArea);
     moveStackToDrawDeck(gameState.cardsInCompanionSlots)
+    moveStackToDrawDeck(gameState.cardsInSiteSlots);
 }
+
 document.getElementById("gatherButton").addEventListener("click", () => {
     handleGatherAndShuffleCards();
     draw();
