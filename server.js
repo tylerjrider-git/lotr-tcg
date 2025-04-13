@@ -90,8 +90,10 @@ io.on('connection', (socket) => {
     });
 });
 
-server.listen(3000, () => {
-    console.log('Server running on http://localhost:3000');
+const SERVER_PORT = 3074;
+const SERVER_IP = '0.0.0.0';
+server.listen(SERVER_PORT, SERVER_IP, () => {
+    console.log('Server running on http://%s:%d', SERVER_IP, SERVER_PORT);
 });
 
 // here is where the game "events" need to be processed and sent back to both players. e.g. game state synchronization.

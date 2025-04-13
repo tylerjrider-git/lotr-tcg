@@ -14,12 +14,14 @@ const BOARD_MARGIN = 0.020;
 const BOTTOM_CARD_BAR = 1.0 - (CARD_HEIGHT + BOARD_MARGIN);
 const OPPONENT_HAND_OFFSET = SITE_CARD_Y;
 
+export const PLAYER_HAND_OFFSET = 0.015;
+
 const PLAYER_HAND_WIDTH = CARD_WIDTH * 3.4;
 // Define the "snap area" (a target area where cards should snap when dropped)
 
 export const supportZone = {
     x: 0.15, y: BOTTOM_CARD_BAR,
-    width: PLAYER_HAND_WIDTH /2 , height: CARD_HEIGHT
+    width: 0.155 , height: CARD_HEIGHT
 }
 
 export const playerHand = {
@@ -29,17 +31,18 @@ export const playerHand = {
 
 // Define the "snap area" (a target area where cards should snap when dropped)
 export const drawDeck = {
-    x: playerHand.x + playerHand.width + 2*GAP, y: playerHand.y,
+    x: playerHand.x + playerHand.width + GAP, y: playerHand.y,
     width: CARD_WIDTH, height: CARD_HEIGHT
 }
 
 export const discardPile = {
-    x: drawDeck.x + drawDeck.width + 2*GAP, y: playerHand.y,
+    x: drawDeck.x + drawDeck.width + 3*GAP, y: playerHand.y,
     width: CARD_WIDTH, height: CARD_HEIGHT
 }
+// Note the width is not used during drawing, only during snap calculations
 export const companionZone = {
-    x: supportZone.x, y: playerHand.y - (CARD_HEIGHT + GAP),
-    width: CARD_WIDTH*9, height: playerHand.height
+    x: supportZone.x, y: playerHand.y - (CARD_HEIGHT + 4*GAP),
+    width: (CARD_WIDTH+GAP)*9, height: playerHand.height
 }
 
 export const deadPile = {
@@ -62,7 +65,7 @@ export const opponentDeck = {
 }
 
 export const opponentHand = {
-    x: opponentDeck.x + opponentDeck.width + 2*GAP, y: OPPONENT_HAND_OFFSET,
+    x: opponentDeck.x + opponentDeck.width + 3*GAP, y: OPPONENT_HAND_OFFSET,
     width: playerHand.width, height: CARD_HEIGHT,
 }
 
@@ -84,4 +87,13 @@ for (let i = 0; i < 9; i++) {
         y: SITE_CARD_Y + ((SITE_CARD_HEIGHT) * i),
         width: SITE_CARD_WIDTH, height: SITE_CARD_HEIGHT
     });
+}
+
+export const discardPreviewArea = {
+    x: 0.10, y: 0.10, width: 0.80, height: 0.70
+}
+
+export const companionPreviewArea = {
+    x: companionZone.x, y: companionZone.y - (GAP + CARD_HEIGHT),
+    width: companionZone.width, height:CARD_HEIGHT + 2*GAP
 }
