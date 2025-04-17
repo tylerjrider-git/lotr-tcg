@@ -1,22 +1,24 @@
-const CARD_SCALE = 0.8;
-const CARD_WIDTH = 0.085 * CARD_SCALE;
-const CARD_HEIGHT = 0.20 * CARD_SCALE;
+const CARD_SCALE = 1.0;
+export const CARD_WIDTH = 0.085 * CARD_SCALE;
+export const CARD_HEIGHT = 0.2 * CARD_SCALE;
 
 const SITE_CARD_X = 0.030;
 const SITE_CARD_Y = 0.030;
 
 const SITE_CARD_WIDTH = .1;
-const SITE_CARD_HEIGHT = .105;
+const SITE_CARD_HEIGHT = .10;
 
 const GAP = 0.005;
 
 const BOARD_MARGIN = 0.020;
 const BOTTOM_CARD_BAR = 1.0 - (CARD_HEIGHT + BOARD_MARGIN);
-const OPPONENT_HAND_OFFSET = SITE_CARD_Y;
+const OPPONENT_AREA_OFFSET = SITE_CARD_Y;
 
-export const PLAYER_HAND_OFFSET = 0.015;
+export const COMPANION_POSSESIONS_OFFSET = 0.010;
+export const PLAYER_HAND_OFFSET = CARD_WIDTH / 2;
+export const OPPONENT_HAND_OFFSET = CARD_WIDTH / 4;
 
-const PLAYER_HAND_WIDTH = CARD_WIDTH * 3.4;
+const PLAYER_HAND_WIDTH = CARD_WIDTH * 5;
 // Define the "snap area" (a target area where cards should snap when dropped)
 
 export const supportZone = {
@@ -41,8 +43,12 @@ export const discardPile = {
 }
 // Note the width is not used during drawing, only during snap calculations
 export const companionZone = {
-    x: supportZone.x, y: playerHand.y - (CARD_HEIGHT + 4*GAP),
-    width: (CARD_WIDTH+GAP)*9, height: playerHand.height
+    x: supportZone.x, y: playerHand.y - (CARD_HEIGHT + GAP),
+    width: (CARD_WIDTH+2*GAP)*9, height: playerHand.height
+}
+export const companionInfoZone = {
+    x: companionZone.x, y: companionZone.y - 4*GAP,
+    width: companionZone.width, height: 4*GAP
 }
 
 export const deadPile = {
@@ -51,26 +57,26 @@ export const deadPile = {
 }
 // Opponent card hand areas
 export const opponentDeadPile = {
-    x: companionZone.x, y: OPPONENT_HAND_OFFSET,
+    x: companionZone.x, y: OPPONENT_AREA_OFFSET,
     width: deadPile.width, height:deadPile.height
 }
 export const opponentDiscardPile = {
-    x: opponentDeadPile.x + opponentDeadPile.width + GAP, y: OPPONENT_HAND_OFFSET,
+    x: opponentDeadPile.x + opponentDeadPile.width + GAP, y: OPPONENT_AREA_OFFSET,
     width: CARD_WIDTH, height: CARD_HEIGHT
 }
 
 export const opponentDeck = {
-    x: opponentDiscardPile.x + opponentDiscardPile.width + GAP, y: OPPONENT_HAND_OFFSET,
+    x: opponentDiscardPile.x + opponentDiscardPile.width + GAP, y: OPPONENT_AREA_OFFSET,
     width: CARD_WIDTH, height: CARD_HEIGHT
 }
 
 export const opponentHand = {
-    x: opponentDeck.x + opponentDeck.width + 3*GAP, y: OPPONENT_HAND_OFFSET,
+    x: opponentDeck.x + opponentDeck.width + 3*GAP, y: OPPONENT_AREA_OFFSET,
     width: playerHand.width, height: CARD_HEIGHT,
 }
 
 export const opponentSupportZone = {
-    x: opponentHand.x + opponentHand.width + GAP, y: OPPONENT_HAND_OFFSET,
+    x: opponentHand.x + opponentHand.width + GAP, y: OPPONENT_AREA_OFFSET,
     width: supportZone.width, height: CARD_HEIGHT,
 }
 
@@ -96,4 +102,26 @@ export const discardPreviewArea = {
 export const companionPreviewArea = {
     x: companionZone.x, y: companionZone.y - (GAP + CARD_HEIGHT),
     width: companionZone.width, height:CARD_HEIGHT + 2*GAP
+}
+
+export const twilightContainerArea = { 
+    x: 0.85, y: 0.50 - 0.025, width: .05, height: .05
+}
+
+export const TOKEN_WIDTH = 0.025;
+export const TOKEN_HEIGHT = 0.025;
+export const buttonWidth = CARD_WIDTH/2;
+export const buttonHeight = buttonWidth;
+
+export const healthBarHeight = 2*GAP;
+export const healthBarWidth = CARD_WIDTH;
+
+export const playerSkirmishArea = {
+    x: 0.5, y: companionZone.y - (CARD_HEIGHT + GAP),
+    width: CARD_WIDTH, height: CARD_HEIGHT,
+}
+
+export const opponentSkirmishArea = {
+    x: 0.5, y: companionZone.y - (CARD_HEIGHT + GAP),
+    width: CARD_WIDTH, height: CARD_HEIGHT,
 }

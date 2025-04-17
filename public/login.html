@@ -45,7 +45,15 @@
             margin-bottom: 5px;
         }
 
+        .login-box label {
+            text-align: left;
+            font-size: 16px;
+            margin-bottom: 5px;
+        }
+
         .login-box input {
+            display: block;
+            width: 100%;
             padding: 10px;
             border-radius: 5px;
             border: none;
@@ -104,11 +112,6 @@
     <script src="/socket.io/socket.io.js"></script>
     <script>
         // grab connection back from server.
-        const socket = io();
-
-        function joinGame(gameId, playerName) {
-            socket.emit('joinGame', gameId, playerName);
-        }
 
         document.getElementById("loginForm").addEventListener("submit", (e) => {
             e.preventDefault();
@@ -130,13 +133,6 @@
             sessionStorage.setItem("gameID", gameID);
             sessionStorage.setItem("playerName", playerName);
             sessionStorage.setItem("deckName", deck)
-
-            joinGame(gameID, playerName);
-        });
-
-        // Redirect to main game once server ACKS.
-        socket.on('gameJoined', (gameId) => {
-            console.log('Successfully joined game', gameId);
             window.location.href = "game.html";
         });
 
