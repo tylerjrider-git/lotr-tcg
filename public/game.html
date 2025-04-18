@@ -132,7 +132,7 @@
             console.log(`${playerName} has joined the game.`);
             event = { "playerName": playerName }
             document.dispatchEvent(new CustomEvent("playerJoined", event));
-            sessionStorage.setItem("opponentName");
+            sessionStorage.setItem("opponentName", playerName);
             updateHeader();
             startGame();
         });
@@ -156,7 +156,7 @@
         })
 
         document.addEventListener('gameEvent', (msg) => {
-            console.log("Forwarding gameEvent: %s", JSON.stringify(msg.detail, 2, null))
+            //console.log("Forwarding gameEvent: %s", JSON.stringify(msg.detail, 2, null))
             socket.emit('gameEvent', msg.detail)
         })
     </script>
