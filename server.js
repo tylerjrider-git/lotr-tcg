@@ -38,8 +38,8 @@ io.on('connection', (socket) => {
 
     // Broadcast to "room" the eventInformation
     socket.on('gameEvent', (eventData) => {
-        console.debug("Forwarding game event from %s to others in %s",
-            socket.id, socket.gameId);
+        // console.debug("Forwarding game event from %s to others in %s",
+        //     socket.id, socket.gameId);
         socket.to(socket.gameId).emit('gameEvent', eventData);
     });
 

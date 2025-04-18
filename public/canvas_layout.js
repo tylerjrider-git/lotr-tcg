@@ -1,12 +1,20 @@
-const CARD_SCALE = 1.0;
-export const CARD_WIDTH = 0.085 * CARD_SCALE;
-export const CARD_HEIGHT = 0.2 * CARD_SCALE;
+const CARD_SCALE = 0.9;
 
-const SITE_CARD_X = 0.030;
-const SITE_CARD_Y = 0.030;
+const CARD_WIDTH_ACTUAL = 714;
+const CARD_HEIGHT_ACTUAL = 994;
+const cardAspectRatio = CARD_WIDTH_ACTUAL / CARD_HEIGHT_ACTUAL;
 
-const SITE_CARD_WIDTH = .1;
-const SITE_CARD_HEIGHT = .10;
+const canvasAspectRatio =4/3 ; // derived??
+
+export const CARD_WIDTH = 0.08 * CARD_SCALE;
+export const CARD_HEIGHT = (CARD_WIDTH / cardAspectRatio)*canvasAspectRatio;
+
+
+export const SITE_CARD_X = 0.01;
+export const SITE_CARD_Y = 0.01;
+
+export const SITE_CARD_HEIGHT =  1.0*CARD_WIDTH*canvasAspectRatio;
+export const SITE_CARD_WIDTH =  1.0*CARD_HEIGHT / canvasAspectRatio;
 
 const GAP = 0.005;
 
@@ -22,8 +30,8 @@ const PLAYER_HAND_WIDTH = CARD_WIDTH * 5;
 // Define the "snap area" (a target area where cards should snap when dropped)
 
 export const supportZone = {
-    x: 0.15, y: BOTTOM_CARD_BAR,
-    width: 0.155 , height: CARD_HEIGHT
+    x: 0.125, y: BOTTOM_CARD_BAR,
+    width: 0.2 , height: CARD_HEIGHT
 }
 
 export const playerHand = {
@@ -90,7 +98,7 @@ export const siteSlots = [];
 for (let i = 0; i < 9; i++) {
     siteSlots.push({
         x: SITE_CARD_X,
-        y: SITE_CARD_Y + ((SITE_CARD_HEIGHT) * i),
+        y: SITE_CARD_Y + ((SITE_CARD_HEIGHT+GAP) * i),
         width: SITE_CARD_WIDTH, height: SITE_CARD_HEIGHT
     });
 }
@@ -110,7 +118,7 @@ export const twilightContainerArea = {
 
 export const TOKEN_WIDTH = 0.025;
 export const TOKEN_HEIGHT = 0.025;
-export const buttonWidth = CARD_WIDTH/2;
+export const buttonWidth =  CARD_WIDTH/2; //  * (3 / 2);
 export const buttonHeight = buttonWidth;
 
 export const healthBarHeight = 2*GAP;
@@ -125,3 +133,9 @@ export const opponentSkirmishArea = {
     x: 0.5, y: companionZone.y - (CARD_HEIGHT + GAP),
     width: CARD_WIDTH, height: CARD_HEIGHT,
 }
+
+export const siteControlArea = {
+    x: SITE_CARD_X, y: SITE_CARD_Y + (SITE_CARD_HEIGHT + GAP) *9 + GAP,
+    width: SITE_CARD_WIDTH, height: SITE_CARD_WIDTH * (61/133) / (3/4)
+}
+export const siteButtonOffset = siteControlArea.height / 2 - (buttonHeight /2);

@@ -10,60 +10,74 @@
             border: 2px solid black;
         }
     </style>
-      <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Uncial+Antiqua&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
 </head>
 
 <body>
-    <h1 id="loginGreeting">Welcome to the TestApp </h1>
-    <h2 id="gameIdHeading">GameId:</h2>
-    <h2 id="opponentNameHeading">Opponent:</h2>
-    <script>
-        window.onload = function () {
-            const playerInfo = sessionStorage.getItem("playerName");
-            const gameId = sessionStorage.getItem("gameID");
-            const heading = document.getElementById("loginGreeting");
-            if (playerInfo) {
-                heading.innerText = "Welcome to the LOTR TCG " + playerInfo;
-            }
-            const gameIdHeading = document.getElementById("gameIdHeading")
-            gameIdHeading.innerText = "GameId:" + gameId;
-        };
-    </script>
+    <div id="app">
+        <div id="Heading">
+            <h1 id="loginGreeting">Welcome to the TestApp </h1>
+            <h2 id="gameInfoHeading">-:</h2>
+        </div>
+        <div id="waitingPopup" class="popup">
+            <div class="popup-content">
+                <p>Waiting for another player to join...</p>
+                <div class="spinner"></div>
+            </div>
+        </div>
 
-    <h1></h1>
+        <canvas id="gameCanvas" style="width: 100%; height: auto;"></canvas>
 
-    <div id="waitingPopup" class="popup">
-        <div class="popup-content">
-            <p>Waiting for another player to join...</p>
-            <div class="spinner"></div>
+        <div class="button-container">
+            <button id="gatherButton" class="game-button">Gather Board</button>
+            <button id="companionsButton" class="game-button">Choose Companions</button>
+            <button id="discardPileButton" class="game-button">View Discard</button>
+            <!-- <button id="addBurdenButton" class="game-button">Add Burden</button>
+            <button id="removeBurdenButton" class="game-button">Remove Burden</button> -->
+            
+            <h2>Twilight</h2>
+            <div class="twilight-container">
+                
+                <button id="twilightUp" class="arrow-button arrow-up">▲</button>
+                <div id="twlightCounter">0</div>
+                <button id="twilightDown" class="arrow-button arrow-down">▼</button>
+            </div>
+            <h2>Burdens</h2>
+            <div class="burden-container">
+                <button id="burdenUp" class="arrow-button arrow-up">▲</button>
+                <div id="burdenCounter">0</div>
+                <button id="burdenDown" class="arrow-button arrow-down">▼</button>
+            </div>
         </div>
     </div>
-
-    <canvas id="gameCanvas" style="width: 100%; height: 120%;"></canvas>
-        <div class="button-container">
-        <button id="gatherButton" class="game-button">Gather Board</button>
-        <button id="companionsButton" class="game-button">Choose Companions</button>
-        <button id="discardPileButton" class="game-button">View Discard</button>
-        <button id="moveButton" class="game-button">Move To Next Site</button>
-        <button id="addBurdenButton" class="game-button">Add Burden</button>
-    </div>
-
-    <h2>Twilight</h2>
-    <div class="twilight-container">
-        <button id="twilightUp" class="arrow-button arrow-up">▲</button>
-        <div id="twlightCounter">0</div>
-        <button id="twilightDown" class="arrow-button arrow-down">▼</button>
-    </div>
+    <!-- ------------- -->
     <div id="gameLogContainer">
         <button onclick="toggleGameLog()">Game Log</button>
         <div id="gameLog" class="hidden"></div>
     </div>
-   
+
     <script type="module" src="canvas.js"></script>
     <!-- This sends data back to my server. -->
     <script src="/socket.io/socket.io.js"></script>
     <script>
 
+        function updateHeader() {
+            const playerInfo = sessionStorage.getItem("playerName");
+            const opponent = sessionStorage.getItem("opponentName");
+            const gameId = sessionStorage.getItem("gameID");
+            const heading = document.getElementById("loginGreeting"); 
+            const gameInfoHeading = document.getElementById("gameInfoHeading");          
+            if (playerInfo) {
+                heading.innerText = "Unofficial LOTR TCG. "
+                gameInfoHeading.innerText = " GameID:" + gameId + " Opponent: " + opponent;
+            }
+
+        }
+        window.onload = function () {
+            updateHeader();
+
+        };
         function joinGame(gameId, playerName) {
             console.log("Joining game from table gameID: %d", gameId);
             socket.emit('joinGame', gameId, playerName);
@@ -82,6 +96,7 @@
             setTimeout(() => {
                 console.log("Sending gameStarted");
                 document.dispatchEvent(new CustomEvent("gameStarted", { detail: "none" }));
+                updateHeader();
             }, 1000);
         }
 
@@ -115,10 +130,10 @@
         // incoming events.
         socket.on('playerJoined', (playerName) => {
             console.log(`${playerName} has joined the game.`);
-            const opponentNameHeading = document.getElementById("opponentNameHeading")
-            opponentNameHeading.innerText = "Opponent:" + playerName;
             event = { "playerName": playerName }
             document.dispatchEvent(new CustomEvent("playerJoined", event));
+            sessionStorage.setItem("opponentName");
+            updateHeader();
             startGame();
         });
 

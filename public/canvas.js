@@ -7,14 +7,13 @@ const ctx = canvas.getContext('2d');
 // game event enums.
 const GAME_EVENT_DECK_INIT = "deckInitialized";
 const GAME_EVENT_TWILIGHT_CHANGED = "twilightChanged";
-const GAME_EVENT_COMPANION_WOUNDED = "companionWounded";
+const GAME_EVENT_CHARACTER_WOUNDED = "characterWounded";
 const GAME_EVENT_PLAYER_MOVED = "playerMoved";
 
 import * as Layout from "./canvas_layout.js"
 
 // UI constants
-const CARD_WIDTH = Layout.CARD_WIDTH;
-const CARD_HEIGHT = Layout.CARD_HEIGHT;
+
 
 const CARD_PREVIEW_SHIFT = 0.02;
 const CARD_PREVIEW_SCALE_FACTOR = 3.0;
@@ -48,7 +47,25 @@ const opponentSupportZone = Layout.opponentSupportZone;
 const opponentCompanionZone = Layout.opponentCompanionZone;
 const siteSlots = Layout.siteSlots;
 
+
 // Card object structure, top of cards is "top of stack"
+const siteButtonLeft = {
+    x: Layout.siteControlArea.x, y: Layout.siteControlArea.y + Layout.siteButtonOffset,
+    width: Layout.buttonWidth, height: Layout.buttonHeight, label: "siteLeft",
+    callback: () => {
+        moveToNextSite(-1);
+    }
+}
+
+const siteButtonRight = {
+    x: Layout.siteControlArea.x + (Layout.siteControlArea.width - Layout.buttonWidth),
+    y: Layout.siteControlArea.y + Layout.siteButtonOffset,
+    width: Layout.buttonWidth, height: Layout.buttonHeight, label: "siteRight",
+    callback: () => {
+        moveToNextSite(1);
+    }
+}
+
 const uiState = {
     mouseX: 0.0,
     mouseY: 0.0,
@@ -57,11 +74,14 @@ const uiState = {
     activelySelectedCard: null,
     discardPreviewActive: false,
     companionPreviewActive: false,
-    companionPreviewCards: [],
+    companionPreviewCards: null,
     cardToPreview: null,
     actionPanels: null,
+    siteButtons: [siteButtonLeft, siteButtonRight]
 }
 uiState.actionPanels = new Map();
+uiState.companionPreviewCards = new Map();
+
 
 const gameState = {
     opponentInitialized: false,
@@ -93,6 +113,9 @@ const gameState = {
 
     activeCompanions: {},
     opponentActiveCompanions: {},
+
+    activeMinions: {},
+    opponentActiveMinions: {},
 }
 function initCompanionSlots() {
     for (let i = 0; i < MAX_NUMBER_COMPANIONS; i++) {
@@ -112,8 +135,8 @@ function initCard(_id, cardType, siteNum = 0) {
         x: drawDeck.x, /* The current location of the card, may be in pile or on board*/
         y: drawDeck.y, /* ** */
         z: 0, /* unsued atm */
-        width: CARD_WIDTH, /* Generally static unless a preview is made */
-        height: CARD_HEIGHT, /* */
+        width: Layout.CARD_WIDTH, /* Generally static unless a preview is made */
+        height: Layout.CARD_HEIGHT, /* */
         cardType: cardType, /* Meta data about cardType (Companion/site/ring/condtion/etc),
                     may set condtions on where it can be played */
         siteNum: siteNum
@@ -133,7 +156,7 @@ function getCardImage(cardId) {
         return cardLibrary[cardId];
     }
 
-    const img = new Image(CARD_WIDTH, CARD_HEIGHT);
+    const img = new Image(Layout.CARD_WIDTH, Layout.CARD_HEIGHT);
     img.src = `assets/cards/${cardId}.png`;
     cardLibrary[cardId] = img;
     return img;
@@ -159,7 +182,7 @@ function sendGameEvent(event) {
 
 function sendWoundEvent(companionInfo) {
     let woundEvent = {
-        type: GAME_EVENT_COMPANION_WOUNDED,
+        type: GAME_EVENT_CHARACTER_WOUNDED,
         companion: companionInfo.card.uuid,
         wounds: companionInfo.currentWounds,
         burdens: companionInfo.currentBurdens
@@ -257,7 +280,7 @@ function drawText(text, x, y, centered = true) {
 }
 
 
-function drawRectR(area, text = "", fillStyle = 'rgba(255, 255, 255, 0.5') {
+function drawRectR(area, text = "", fillStyle = 'rgba(255, 255, 255, 0.3') {
     let x = Math.round(area.x * logical.width);
     let y = Math.round(area.y * logical.height);
     let width = Math.round(area.width * logical.width);
@@ -276,6 +299,12 @@ function drawRectR(area, text = "", fillStyle = 'rgba(255, 255, 255, 0.5') {
     ctx.stroke();
     ctx.fill();
 
+    // const img = getAsset("card_placemat");
+    // if (img && img.complete) {   // Make sure the image is loaded
+    //     ctx.save()
+    //     ctx.drawImage(img, x, y, width, height);
+    //     ctx.restore();
+    // }
     drawText(text, x + width / 2, y + height / 2)
 }
 
@@ -338,6 +367,9 @@ function drawCard(card, shadowColor = null) {
             ctx.drawImage(cardImage, x, y, w, h);
             ctx.restore();
         }
+        cardImage.onload = () => {
+            ctx.drawImage(cardImage, x, y, w, h);
+        };
     }
 }
 
@@ -403,7 +435,7 @@ function drawCardPreviewRotated(card, shadowColor = null) {
     let cardPreview = { ...card };
     cardPreview.width *= CARD_PREVIEW_SCALE_FACTOR;
     cardPreview.height *= CARD_PREVIEW_SCALE_FACTOR;
-    cardPreview.x = cardPreview.x + CARD_WIDTH;
+    cardPreview.x = cardPreview.x + Layout.CARD_WIDTH;
 
     const angle = 90;
     const cardImage = getCardImage(card.id);
@@ -431,11 +463,14 @@ function drawCardPreviewRotated(card, shadowColor = null) {
     ctx.restore();
 }
 
-function drawCardWithPreview(card, shadowColor = null, drawUnder = false) {
+function drawCardWithPreview(card, shadowColor = null) {
     let hover = isMouseOverCard(card);
     if (hover) {
         let offsetCard = { ...card }
-        offsetCard.y = card.y - CARD_PREVIEW_SHIFT;
+        // Do not shift card if it is currently grabbed.
+        if (uiState.activelySelectedCard == null) {
+            offsetCard.y = card.y - CARD_PREVIEW_SHIFT;
+        }
         drawCard(offsetCard, shadowColor)
         uiState.cardToPreview = offsetCard;
     } else {
@@ -450,6 +485,24 @@ function drawSpreadPile(pile) {
     });
 }
 
+
+function drawSiteSelectionButton() {
+    const x = Layout.siteControlArea.x * logical.width;
+    const y = Layout.siteControlArea.y * logical.height;
+    const w = Layout.siteControlArea.width * logical.width;
+    const h = Layout.siteControlArea.height * logical.height;
+
+    // 1335:613
+    const selectorImage = getAsset("SiteSelector");
+    if (selectorImage) {
+        if (selectorImage.complete) {   // Make sure the image is loaded
+            ctx.save()
+            ctx.drawImage(selectorImage, x, y, w, h);
+            ctx.restore();
+        }
+    }
+}
+
 function drawSiteBorders() {
     let i = 0;
     siteSlots.forEach(siteSlot => {
@@ -457,6 +510,18 @@ function drawSiteBorders() {
         drawRectR(siteSlot, siteName);
         i++;
     })
+    drawSiteSelectionButton();
+}
+
+function drawMinionCard(card) {
+
+    drawCardWithPreview(card);
+    let actionPanel = uiState.actionPanels.get(card.uuid);
+    actionPanel.origin.x = card.x;
+    actionPanel.origin.y = card.y;
+    if (gameState.activeMinions[card.uuid]) {
+        drawActionPanel(actionPanel, gameState.activeMinions[card.uuid])
+    }
 }
 
 // Player Card piles
@@ -464,7 +529,11 @@ function drawSiteBorders() {
 function drawInPlayCards() {
     // Draw the cards
     gameState.cardsInPlay.forEach(card => {
-        drawCardWithPreview(card)
+        if (gameState.activeMinions[card.uuid]) {
+            drawMinionCard(card);
+        } else {
+            drawCardWithPreview(card)
+        }
     });
 }
 
@@ -493,8 +562,8 @@ function drawFanout() {
         card.y = logical.height / 2;
         const w = card.width * logical.width;
         const h = card.height * logical.height;
-        const cw_act = CARD_WIDTH * logical.width;
-        const ch_act = CARD_HEIGHT * logical.height;
+        const cw_act = Layout.CARD_WIDTH * logical.width;
+        const ch_act = Layout.CARD_HEIGHT * logical.height;
 
         ctx.translate(card.x, card.y);
         let start = -Math.PI / 4
@@ -542,13 +611,13 @@ function drawActionPanelButton(button, asset) {
 
     // width / height => 3/2.
     // (width ) /  = (height ) * (3/2) / aspectRatio.
-    width = height * (3 / 2);
+    //width = height * (3 / 2);
 
     const buttonImage = getAsset(asset);
     ctx.drawImage(buttonImage, x, y, width, height);
 }
 
-function drawHealthBar(origin, color, health, max=MAX_HEALTH) {
+function drawHealthBar(origin, color, health, max = MAX_HEALTH) {
     let healthBar = {
         x: origin.x, y: origin.y,
         width: Layout.healthBarWidth, height: Layout.healthBarHeight
@@ -565,26 +634,39 @@ function drawHealthBar(origin, color, health, max=MAX_HEALTH) {
     }
 }
 
+function drawActionPanel(actionPanel, companion) {
+    const origin = { x: actionPanel.origin.x, y: actionPanel.origin.y }
+    actionPanel.heal.x = origin.x;
+    actionPanel.heal.y = origin.y - Layout.buttonHeight;
+    actionPanel.wound.x = origin.x + Layout.buttonWidth;
+    actionPanel.wound.y = origin.y - Layout.buttonHeight;
+    actionPanel.healthBar.x = origin.x;
+    actionPanel.healthBar.y = origin.y - Layout.buttonHeight - (Layout.healthBarHeight + GAP);
+    actionPanel.burdenBar.x = origin.x;
+    actionPanel.burdenBar.y = origin.y - Layout.buttonHeight - 2 * (Layout.healthBarHeight + GAP);
+
+    drawActionPanelButton(actionPanel.wound, "wound_button");
+    drawActionPanelButton(actionPanel.heal, "heal_button");
+    drawHealthBar({ x: actionPanel.healthBar.x, y: actionPanel.healthBar.y },
+        'red', companion.currentWounds);
+
+    if (companion.card.cardType == "RingBearer") {
+        drawHealthBar({ x: actionPanel.burdenBar.x, y: actionPanel.burdenBar.y }
+            , 'white', companion.currentBurdens, MAX_BURDENS)
+    }
+}
+
 function drawCompanionActionPanels() {
     for (const [id, actionPanel] of uiState.actionPanels.entries()) {
-        let companion = gameState.activeCompanions[id];
-        let origin = { x: actionPanel.healthBar.x, y: actionPanel.healthBar.y }
-        drawActionPanelButton(actionPanel.wound, "wound_button");
-        drawActionPanelButton(actionPanel.heal, "heal_button");
-        drawRect(actionPanel.healthBar, "", 'rgba(255, 255, 255, 0.0');
-
-        drawHealthBar(origin, 'red', companion.currentWounds);
-        if (companion.card.cardType == "RingBearer") {
-            let origin = { x: actionPanel.burdenBar.x, y: actionPanel.burdenBar.y }
-            drawHealthBar(origin, 'white', companion.currentBurdens, MAX_BURDENS)
+        if (gameState.activeCompanions[id]) {
+            drawActionPanel(actionPanel, gameState.activeCompanions[id])
         }
     }
 }
 
 
-
 function drawOpponentActionPanel(companion) {
-    let origin = { x: companion.card.x, y: companion.card.y + CARD_HEIGHT + GAP }
+    let origin = { x: companion.card.x, y: companion.card.y + Layout.CARD_HEIGHT + GAP }
     drawHealthBar(origin, 'red', companion.currentWounds);
 
     if (companion.card.cardType == "RingBearer") {
@@ -647,15 +729,19 @@ function drawBackground() {
 function drawDeadPile() {
     let numCardsInDeadPile = gameState.cardsInPlayerDeadPile.length
     if (numCardsInDeadPile > 0) {
-        drawCardRotated(gameState.cardsInPlayerDeadPile[numCardsInDeadPile - 1], 90);
+        let card = gameState.cardsInPlayerDeadPile[numCardsInDeadPile - 1];
+        drawCardRotated(card, 90);
+        if (isMouseOverCardRotated(card)) {
+            uiState.cardToPreview = card;
+        }
     }
 }
 
 function drawCompanionZones() {
     for (let i = 0; i < MAX_NUMBER_COMPANIONS; i++) {
         const rect = {
-            x: companionZone.x + i * (CARD_WIDTH + 2 * GAP), y: companionZone.y,
-            width: CARD_WIDTH, height: CARD_HEIGHT
+            x: companionZone.x + i * (Layout.CARD_WIDTH + 2 * GAP), y: companionZone.y,
+            width: Layout.CARD_WIDTH, height: Layout.CARD_HEIGHT
         }
         drawRectR(rect)
     }
@@ -675,10 +761,23 @@ function drawSiteCards() {
         }
     }
 }
+
+function drawOpponentMinion(card) {
+    if (gameState.opponentActiveMinions[card.uuid]) {
+        drawCardWithPreview(card, 'red');
+        drawOpponentActionPanel(gameState.opponentActiveMinions[card.uuid]);
+    }
+}
+
 function drawOpponentCardsInPlay() {
     gameState.cardsInOpponentPlay.forEach(card => {
-        drawCardWithPreview(card, 'red')
-    })
+        if (card.cardType != "Minion") {
+            drawCardWithPreview(card, 'red')
+        } else {
+            console.log("Drawing opponent minions");
+            drawOpponentMinion(card);
+        }
+    });
 }
 
 function drawOpponentDiscardPile() {
@@ -739,16 +838,18 @@ function drawOpponentCompanionSlot(slot, origin, slotNum) {
     }
     if (companionSlot >= 0) {
         let card = slot[companionSlot];
-        card.x = origin.x + j * (Layout.COMPANION_POSSESIONS_OFFSET);
-        card.y = origin.y;
-        drawCardWithPreview(card);
-        drawOpponentActionPanel(gameState.opponentActiveCompanions[card.uuid])
+        if (card) {
+            card.x = origin.x + j * (Layout.COMPANION_POSSESIONS_OFFSET);
+            card.y = origin.y;
+            drawCardWithPreview(card);
+            drawOpponentActionPanel(gameState.opponentActiveCompanions[card.uuid])
+        }
     }
 }
 
 function drawOpponentCompanionCards() {
     for (let i = 0; i < MAX_NUMBER_COMPANIONS; i++) {
-        let offset = { x: opponentCompanionZone.x + i * (CARD_WIDTH + 2 * GAP), y: opponentCompanionZone.y }
+        let offset = { x: opponentCompanionZone.x + i * (Layout.CARD_WIDTH + 2 * GAP), y: opponentCompanionZone.y }
         drawOpponentCompanionSlot(gameState.cardsInOpponentCompanionSlots[i], offset, i);
     }
 
@@ -767,8 +868,8 @@ function drawOpponentSupportCards() {
 function drawOpponentCompanionZones() {
     for (let i = 0; i < MAX_NUMBER_COMPANIONS; i++) {
         const rect = {
-            x: opponentCompanionZone.x + i * (CARD_WIDTH + 2 * GAP), y: opponentCompanionZone.y,
-            width: CARD_WIDTH, height: CARD_HEIGHT
+            x: opponentCompanionZone.x + i * (Layout.CARD_WIDTH + 2 * GAP), y: opponentCompanionZone.y,
+            width: Layout.CARD_WIDTH, height: Layout.CARD_HEIGHT
         }
         drawRectR(rect)
     }
@@ -780,8 +881,8 @@ function drawDiscardPreview() {
     const numCardsInDiscard = gameState.cardsInPlayerDiscard.length;
     for (let i = 0; i < numCardsInDiscard; i++) {
         let card = gameState.cardsInPlayerDiscard[i];
-        card.x = Layout.discardPreviewArea.x + (i % 10) * CARD_WIDTH;
-        card.y = Layout.discardPreviewArea.y + Math.floor(i / 10) * CARD_HEIGHT;
+        card.x = Layout.discardPreviewArea.x + (i % 10) * Layout.CARD_WIDTH;
+        card.y = Layout.discardPreviewArea.y + Math.floor(i / 10) * Layout.CARD_HEIGHT;
         drawCardWithPreview(card)
     }
 }
@@ -789,8 +890,12 @@ function drawDiscardPreview() {
 function drawCompanionPreview() {
     drawRectR(Layout.companionPreviewArea, "", 'rgba(128, 128, 128, 0.8');
     let i = 0;
-    uiState.companionPreviewCards.forEach(card => {
-        card.x = Layout.companionPreviewArea.x + (i % 9) * (GAP + CARD_WIDTH);
+
+    if (uiState.companionPreviewCards.length == 0) {
+        return 0;
+    }
+    uiState.companionPreviewCards.forEach((card, key) => {
+        card.x = Layout.companionPreviewArea.x + (i % 9) * (GAP + Layout.CARD_WIDTH);
         card.y = Layout.companionPreviewArea.y;
         drawCardWithPreview(card);
         i++;
@@ -996,7 +1101,7 @@ function drawOrb(x, y, width, height) {
 function drawSiteToken(asset, site, offset) {
     site = Math.min(9, site);
     let x = Layout.siteSlots[site - 1].x - 2 * GAP;
-    let y = Layout.siteSlots[site - 1].y + offset * (CARD_WIDTH / 3);
+    let y = Layout.siteSlots[site - 1].y + offset * (Layout.CARD_WIDTH / 3);
     drawToken(x, y, asset);
 }
 
@@ -1111,10 +1216,33 @@ function placeCardInHand(from, card) {
     return true;
 }
 
+function initMinion(card) {
+    let minionInfo = {
+        card: card,
+        currentWounds: 0,
+    }
+
+    createActionPanel(minionInfo);
+    gameState.activeMinions[card.uuid] = minionInfo;
+}
+
+function handleMinionPlayed(card) {
+    if (gameState.activeMinions[card.uuid]) {
+        console.log("Minion already active,nothing to do");
+    } else {
+        initMinion(card);
+    }
+}
+
 function placeCardOnPlayArea(from, card) {
     console.log("Moving card onto table id:%s", card.id)
-    gameState.cardsInPlay.push(card)
+    gameState.cardsInPlay.push(card);
+
+    if (card.cardType == "Minion") {
+        handleMinionPlayed(card);
+    }
     sendCardMovedEvent(from, CARD_EVENT_LOCATION_PLAY_AREA, card);
+
     return true;
 }
 
@@ -1130,6 +1258,17 @@ function placeCardInDiscard(from, card) {
     return true;
 }
 
+
+
+function removeCompanionFromPlay(card) {
+    if (gameState.activeCompanions[card.uuid]) {
+        gameState.activeCompanions[card.uuid] = null;
+    }
+
+    if (uiState.actionPanels.has(card.uuid)) {
+        uiState.actionPanels.delete(card.uuid);
+    }
+}
 function placeCardInDeadPile(from, card) {
     console.log("Adding card to dead pile id:%s", card.id)
 
@@ -1139,6 +1278,9 @@ function placeCardInDeadPile(from, card) {
     card.y = deadPile.y
 
     sendCardMovedEvent(from, CARD_EVENT_LOCATION_DEAD_PILE, card);
+
+    // remove activeCompanionInformation.
+    removeCompanionFromPlay(card);
     return true;
 }
 
@@ -1192,7 +1334,7 @@ function cardIsCompanionType(card) {
 }
 
 function restackCompanionSlot(slotNum) {
-    const slotOrigin = { x: companionZone.x + slotNum * (CARD_WIDTH + 2 * GAP), y: companionZone.y }
+    const slotOrigin = { x: companionZone.x + slotNum * (Layout.CARD_WIDTH + 2 * GAP), y: companionZone.y }
     const companionSlot = gameState.companionSlots[slotNum];
     const numCardsInSlot = companionSlot.length;
     let offset = 0;
@@ -1203,16 +1345,9 @@ function restackCompanionSlot(slotNum) {
         if (cardIsCompanionType(card)) {
             // update buttons while we are here.
             let actionPanel = uiState.actionPanels.get(card.uuid);
-            console.log("Updateing companionSlot, action panel is : (%s) %s", card.uuid, JSON.stringify(actionPanel, 2, null));
             // TODO just update the actionPanel origin, and draw/monitor events from that offset.
-            actionPanel.heal.x = slotOrigin.x;
-            actionPanel.heal.y = slotOrigin.y - Layout.buttonHeight;
-            actionPanel.wound.x = slotOrigin.x + Layout.buttonWidth;
-            actionPanel.wound.y = slotOrigin.y - Layout.buttonHeight;
-            actionPanel.healthBar.x = slotOrigin.x;
-            actionPanel.healthBar.y = slotOrigin.y - Layout.buttonHeight - (Layout.healthBarHeight + GAP);
-            actionPanel.burdenBar.x = slotOrigin.x;
-            actionPanel.burdenBar.y = slotOrigin.y - Layout.buttonHeight - 2 * (Layout.healthBarHeight + GAP);
+            actionPanel.origin.x = slotOrigin.x;
+            actionPanel.origin.y = slotOrigin.y;
             break;
         }
     }
@@ -1234,9 +1369,9 @@ function restackCompanionSlot(slotNum) {
 
 }
 
-function createActionPanel(companionInfo, slotNum) {
+function createActionPanel(companionInfo) {
     let card = companionInfo.card;
-
+    console.log("initializing action panel for : %s", JSON.stringify(companionInfo, 2, null))
     let healButton = {
         x: card.x, y: card.y - GAP,
         width: Layout.buttonWidth, height: Layout.buttonHeight, label: "Heal",
@@ -1264,9 +1399,13 @@ function createActionPanel(companionInfo, slotNum) {
         x: healthBar.x, y: healthBar.y - (Layout.healthBarHeight + GAP),
         width: Layout.healthBarWidth, height: Layout.healthBarHeight
     }
+    // TODO strength boost bar.
+    // let strength go + or -.
 
     let actionPanel = {
-        wound: woundButton, heal: healButton,
+        origin: { x: card.x, y: card.y },
+        wound: woundButton,
+        heal: healButton,
         healthBar: healthBar,
         burdenBar: burdenBar,
     }
@@ -1285,7 +1424,7 @@ function initializeCompanion(card, slotNum) {
     }
     // it is a map, so the location of the card does not matter.
     gameState.activeCompanions[card.uuid] = companionInfo;
-    createActionPanel(companionInfo, slotNum);
+    createActionPanel(companionInfo);
 }
 
 function slotHasCompanion(slot) {
@@ -1367,7 +1506,6 @@ function handleGenericCardMoved(from, selectedCard) {
     ]
 
     for (const zone of dropZones) {
-        console.log("Checking toArea: %s", JSON.stringify(zone.toArea, 2, null))
         if (mouseInArea(zone.toArea)) {
             if (zone.action(from, selectedCard)) {
                 return;
@@ -1446,7 +1584,6 @@ function handleDrawDeckTapped() {
                 const pulledCard = gameState.cardsInDrawDeck.splice(randomIndex, 1)[0];
                 placeCardInHand(CARD_EVENT_LOCATION_PLAYER_HAND, pulledCard);
             } else {
-                console.log("Too many cards in hand.")
                 alert("Max number of cards added")
             }
         }
@@ -1475,29 +1612,27 @@ function handleCompanionPreviewTapped() {
     if (uiState.companionPreviewActive == false) {
         return;
     }
-    const numCompanionInPreview = uiState.companionPreviewCards.length;
-    let i = 0;
 
+    let targetCard = null
     // Remove corresponding card from draw deck into companion slot.
-    for (i = 0; i < numCompanionInPreview; i++) {
-        if (isMouseOverCard(uiState.companionPreviewCards[i])) {
-            break;
+    uiState.companionPreviewCards.forEach((card, id) => {
+        console.log("Is mouse over %s?", card.id)
+        if (isMouseOverCard(card)) {
+            targetCard = card;
         }
-    }
-    if (i < numCompanionInPreview) {
-        // Remove it from draw deck and UI preview.
-        let card = uiState.companionPreviewCards[i];
-        uiState.companionPreviewCards.splice(i, 1)[0];
-        let pulledCard = removeCardFromDeck(card);
+    });
+
+    if (targetCard) {
+        uiState.companionPreviewCards.delete(targetCard.id);
+        let pulledCard = removeCardFromDeck(targetCard);
         if (pulledCard) {
-            console.log("Pulled card from deck: %s", JSON.stringify(pulledCard, 2, null));
             placeCardInFreeCompanionSlot("playerDeck", pulledCard);
         } else {
             console.error("Could not find card in draw decK??");
         }
-        return true;
     }
 }
+
 
 function handleSiteSlotTapped() {
     for (let i = 0; i < siteSlots.length; i++) {
@@ -1562,11 +1697,13 @@ function checkButtonsClicked() {
         checkButtonClicked(actionPanel.wound);
         checkButtonClicked(actionPanel.heal);
     };
+    uiState.siteButtons.forEach(button => {
+        checkButtonClicked(button);
+    });
 }
 
 canvas.addEventListener('click', () => {
     checkCardTapped();
-
     checkButtonsClicked();
     uiState.activelySelectedCard = null; // backstop
     draw();
@@ -1648,6 +1785,12 @@ function checkButtonHover() {
             }
         }
     }
+    uiState.siteButtons.forEach(btn => {
+        if (uiState.mouseX >= btn.x && uiState.mouseX <= btn.x + btn.width &&
+            uiState.mouseY >= btn.y && uiState.mouseY <= btn.y + btn.height) {
+            hovering = true;
+        }
+    })
     canvas.style.cursor = hovering ? 'pointer' : 'default';
 }
 
@@ -1668,17 +1811,13 @@ canvas.addEventListener('mousemove', (e) => {
 function playRingBearerFromDeck() {
     let bearer = null;
     let ring = null;
-    let bearerIdx = -1;
-    let ringIdx = -1;
 
     for (let i = 0; i < gameState.cardsInDrawDeck.length; i++) {
         let card = gameState.cardsInDrawDeck[i];
         if (card.cardType == "RingBearer") {
             bearer = card;
-            bearerIdx = i;
         } else if (card.cardType == "Ring") {
             ring = card;
-            ringIdx = i;
         }
     }
 
@@ -1780,7 +1919,6 @@ function commonRemoteCardAction(eventData, toPile) {
         card.y = eventData.position.y;
         toPile.push(card);
     }
-    // Push to top of stack.
 }
 
 function initializeOpponentCompanion(card, slotNum) {
@@ -1796,7 +1934,6 @@ function initializeOpponentCompanion(card, slotNum) {
 
 function restackOpponentSlot(companionSlot, slotNum) {
     // First check if a companionInfo has been initialized:
-    console.log("Restacking cards in companionSlot[%d]", slotNum)
     let i = 0;
     for (i = 0; i < companionSlot.length; i++) {
         let card = companionSlot[i];
@@ -1811,6 +1948,28 @@ function restackOpponentSlot(companionSlot, slotNum) {
     }
 }
 
+function initializeOpponentMinion(card) {
+    let minionInfo = {
+        card: card,
+        currentWounds: 0,
+        currentBurdens: 0,
+    }
+    console.log("Creating Opponent Minion Info :%s", JSON.stringify(minionInfo, 2, null));
+    gameState.opponentActiveMinions[card.uuid] = minionInfo;
+}
+
+function updateOpponentMinionInfo(card) {
+    gameState.cardsInOpponentPlay.forEach(card => {
+        if (card.cardType == "Minion") {
+            if (gameState.opponentActiveMinions[card.uuid]) {
+                console.log("Opponent minion already tracked.");
+            } else {
+                initializeOpponentMinion(card);
+            }
+        }
+    });
+}
+
 function updateOpponentCompanionInfo(eventData) {
     for (let slotNum = 0; slotNum < gameState.cardsInOpponentCompanionSlots.length; slotNum++) {
         restackOpponentSlot(gameState.cardsInOpponentCompanionSlots[slotNum], slotNum);
@@ -1821,9 +1980,10 @@ function handleRemotePlayAreaCard(eventData) {
     // Since these are "free form cards", we actually want to play them
     // in relation to the opponent, so mirror the Y  equator using the y-midpoint
     // of the card
-    let y_mid = eventData.position.y + CARD_HEIGHT;
+    let y_mid = eventData.position.y + Layout.CARD_HEIGHT;
     eventData.position.y = (1.0 - y_mid);
     commonRemoteCardAction(eventData, gameState.cardsInOpponentPlay);
+    updateOpponentMinionInfo(eventData);
 }
 
 function handleRemotePlayerHand(eventData) {
@@ -1902,50 +2062,70 @@ document.getElementById("gatherButton").addEventListener("click", () => {
     draw();
 });
 
-document.getElementById("moveButton").addEventListener("click", () => {
-    gameState.playerSite = Math.min(9, gameState.playerSite + 1);
+function moveToNextSite(delta) {
+    console.log("Move to next site :%d", delta)
+    let curSite = gameState.playerSite;
+    gameState.playerSite = Math.max(1, Math.min(9, curSite + delta));
     sendPlayerMovedEvent(gameState.playerSite);
     draw();
-});
+};
 
-document.getElementById("addBurdenButton").addEventListener("click", () => {
-    Object.entries(gameState.activeCompanions).forEach(([id, companion]) => {
-        if (companion.card.cardType == "RingBearer") {
-            companion.currentBurdens = Math.min(9, companion.currentBurdens + 1)
-        }
-    });
-    draw();
-});
 
-document.getElementById("")
-function changeCounter(delta) {
+function changeTwilightCounter(delta) {
     gameState.twilight += delta;
     document.getElementById("twlightCounter").textContent = gameState.twilight;
     sendTwilightChangedEvent(gameState.twilight);
 }
 
 document.getElementById("twilightUp").addEventListener("click", () => {
-    changeCounter(1)
+    changeTwilightCounter(1)
 });
 
 document.getElementById("twilightDown").addEventListener("click", () => {
-    changeCounter(-1)
+    changeTwilightCounter(-1)
 });
+
+function changeBurden(delta) {
+    Object.entries(gameState.activeCompanions).forEach(([id, companion]) => {
+        if (companion.card.cardType == "RingBearer") {
+            companion.currentBurdens = Math.max(0, (Math.min(9, companion.currentBurdens + delta)));
+            document.getElementById("burdenCounter").textContent = companion.currentBurdens;
+            sendWoundEvent(companion);
+        }
+    });
+
+    draw();
+}
+
+document.getElementById("burdenUp").addEventListener("click", () => {
+    changeBurden(1)
+});
+
+document.getElementById("burdenDown").addEventListener("click", () => {
+    changeBurden(-1)
+});
+
 
 function toggleCompanionPreview() {
     if (uiState.companionPreviewActive == false) {
         uiState.companionPreviewActive = true;
 
-        uiState.companionPreviewCards = [];
         gameState.cardsInDrawDeck.forEach(card => {
             if (cardIsCompanionType(card)) {
                 // Unique only.
-                uiState.companionPreviewCards.push(card);
+                if (uiState.companionPreviewCards.has(card.id) == false) {
+                    console.log("Setting map.... %s => %s", card.id, card)
+                    uiState.companionPreviewCards.set(card.id, card);
+                }
             }
+        });
+        console.log("Map ->", Object.fromEntries(uiState.companionPreviewCards));
+        uiState.companionPreviewCards.forEach((card, key) => {
+            console.log("Map has:", key, card);
         });
     } else {
         uiState.companionPreviewActive = false;
-        uiState.companionPreviewCards.forEach(card => {
+        uiState.companionPreviewCards.forEach((card, key) => {
             card.x = Layout.drawDeck.y;
             card.y = Layout.drawDeck.y;
         })
@@ -2034,12 +2214,15 @@ function handleTwilightChanged(eventData) {
     console.log("Twilight now %d", gameState.twilight)
 }
 
-function handleOpponentCompanionWounded(eventData) {
+function handleOpponentCharacterWounded(eventData) {
     let woundEvent = eventData;
 
     if (gameState.opponentActiveCompanions[woundEvent.companion]) {
         gameState.opponentActiveCompanions[woundEvent.companion].currentWounds = eventData.wounds;
         gameState.opponentActiveCompanions[woundEvent.companion].currentBurdens = eventData.burdens;
+    } else if (gameState.opponentActiveMinions[woundEvent.companion]) {
+        gameState.opponentActiveMinions[woundEvent.companion].currentWounds = eventData.wounds;
+        gameState.opponentActiveMinions[woundEvent.companion].currentBurdens = eventData.burdens;
     } else {
         console.error("Got wound event for companion %s, which does not exist yet?", woundEvent.companion)
     }
@@ -2071,8 +2254,8 @@ document.addEventListener('remoteGameEvent', (msg) => {
         case GAME_EVENT_TWILIGHT_CHANGED:
             handleTwilightChanged(eventData);
             break;
-        case GAME_EVENT_COMPANION_WOUNDED:
-            handleOpponentCompanionWounded(eventData);
+        case GAME_EVENT_CHARACTER_WOUNDED:
+            handleOpponentCharacterWounded(eventData);
             break;
         case GAME_EVENT_PLAYER_MOVED:
             handlePlayerMovedEvent(eventData);
@@ -2100,9 +2283,9 @@ document.addEventListener('twilightChanged', (msg) => {
 
 
 function resizeCanvas() {
-   
+
     const scale = window.devicePixelRatio || 1;
-    console.log("devicePixelRatio: %f", scale);
+
     // Match canvas size to display size * scale
     logical.width = canvas.clientWidth;
     logical.height = canvas.clientHeight;
@@ -2116,6 +2299,7 @@ function resizeCanvas() {
     draw();
 }
 window.addEventListener('resize', resizeCanvas);
+window.addEventListener('load', resizeCanvas);
 resizeCanvas();
 
 // Initial draw
