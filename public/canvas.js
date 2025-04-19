@@ -24,21 +24,6 @@ const MAX_NUMBER_COMPANIONS = 9;
 const MAX_HEALTH = 6;
 const MAX_BURDENS = 9;
 
-const supportZone = Layout.supportZone;
-const playerHand = Layout.playerHand;
-const drawDeck = Layout.drawDeck;
-const discardPile = Layout.discardPile;
-const companionZone = Layout.companionZone;
-const deadPile = Layout.deadPile;
-const opponentDeadPile = Layout.opponentDeadPile;
-const opponentDiscardPile = Layout.opponentDiscardPile;
-const opponentDeck = Layout.opponentDeck;
-const opponentHand = Layout.opponentHand;
-const opponentSupportZone = Layout.opponentSupportZone;
-const opponentCompanionZone = Layout.opponentCompanionZone;
-const siteSlots = Layout.siteSlots;
-
-
 // Card object structure, top of cards is "top of stack"
 const siteButtonLeft = {
     x: Layout.siteControlArea.x, y: Layout.siteControlArea.y + Layout.siteButtonOffset,
@@ -83,39 +68,41 @@ const gameState = {
         currentSite: 1,
         companions: {},
         minions: {},
+        allies: {}, // TODO.
     },
     opponent: {
         initialized: false,
         currentSite: 1,
         companions: {},
         minions: {},
+        allies: {},
     },
 
     cardsInPlay: [],
     cardsInPlayerHand: [],
     cardsInPlayerDiscard: [],
-    cardsInSiteSlots: [],
     cardsInPlayerDeadPile: [],
     cardsInDrawDeck: [],
     cardsInSiteDeck: [],
     cardsInSupportArea: [],
-    companionSlots: [],
+    cardsInCompanionSlots: [],
 
     cardsInOpponentPlay: [],
     cardsInOpponentsHand: [],
     cardsInOpponentsDiscard: [],
     cardsInOpponentDeadPile: [],
     cardsInOpponentDrawDeck: [],
-    cardsInOpponentSite: [],
     cardsInOpponentSupportArea: [],
     cardsInOpponentCompanionSlots: [],
 
+    cardsInOpponentSite: [],
+    cardsInSiteSlots: [],
     globalUuidRef: 0,
 }
 
 function initCompanionSlots() {
     for (let i = 0; i < MAX_NUMBER_COMPANIONS; i++) {
-        gameState.companionSlots[i] = []
+        gameState.cardsInCompanionSlots[i] = []
         gameState.cardsInOpponentCompanionSlots[i] = []
     }
 }
@@ -128,8 +115,8 @@ function initCard(_id, cardType, siteNum = 0) {
     return {
         id: _id, /* This is the refrence picture/name of card. May be multiple instances in deck/game */
         uuid: gameState.globalUuidRef, /* unique identifier for this players instance of _id, unique per game */
-        x: drawDeck.x, /* The current location of the card, may be in pile or on board*/
-        y: drawDeck.y, /* ** */
+        x: Layout.drawDeck.x, /* The current location of the card, may be in pile or on board*/
+        y: Layout.drawDeck.y, /* ** */
         z: 0, /* unsued atm */
         width: Layout.CARD_WIDTH, /* Generally static unless a preview is made */
         height: Layout.CARD_HEIGHT, /* */
@@ -501,7 +488,7 @@ function drawSiteSelectionButton() {
 
 function drawSiteBorders() {
     let i = 0;
-    siteSlots.forEach(siteSlot => {
+    Layout.siteSlots.forEach(siteSlot => {
         let siteName = "Site " + (i + 1);
         drawRectR(siteSlot, siteName);
         i++;
@@ -661,7 +648,7 @@ function drawCompanionActionPanels() {
 }
 
 
-function drawOpponentActionPanel(companion) {
+function drawOpponentHealth(companion) {
     let origin = { x: companion.card.x, y: companion.card.y + Layout.CARD_HEIGHT + Layout.Margin }
     drawHealthBar(origin, 'red', companion.currentWounds);
 
@@ -672,7 +659,7 @@ function drawOpponentActionPanel(companion) {
 }
 
 function drawCompanionSlot(slot) {
-    let companionSlot = gameState.companionSlots[slot];
+    let companionSlot = gameState.cardsInCompanionSlots[slot];
 
     // Draw all the cards.
     companionSlot.forEach(card => {
@@ -683,7 +670,7 @@ function drawCompanionSlot(slot) {
 function drawPlayerCompanionCards() {
     // cardsInCompanionSlots should be "slots", and each have sub attachments.
     for (let i = 0; i < MAX_NUMBER_COMPANIONS; i++) {
-        if (gameState.companionSlots[i]) {
+        if (gameState.cardsInCompanionSlots[i]) {
             drawCompanionSlot(i);
         }
     }
@@ -708,7 +695,7 @@ function drawDrawDeck() {
     let numCardsInDrawDeck = gameState.cardsInDrawDeck.length
     if (numCardsInDrawDeck > 0) {
         for (let i = 0; i < numCardsInDrawDeck; i++) {
-            gameState.cardsInDrawDeck[i].x = drawDeck.x + Layout.DRAW_DECK_SHIFT * Math.floor(Math.sqrt(i));
+            gameState.cardsInDrawDeck[i].x = Layout.drawDeck.x + Layout.DRAW_DECK_SHIFT * Math.floor(Math.sqrt(i));
             drawCardReverse(gameState.cardsInDrawDeck[i])
         }
     }
@@ -736,7 +723,7 @@ function drawDeadPile() {
 function drawCompanionZones() {
     for (let i = 0; i < MAX_NUMBER_COMPANIONS; i++) {
         const rect = {
-            x: companionZone.x + i * (Layout.CARD_WIDTH + 2 * Layout.Margin), y: companionZone.y,
+            x: Layout.companionZone.x + i * (Layout.CARD_WIDTH + 2 * Layout.Margin), y: Layout.companionZone.y,
             width: Layout.CARD_WIDTH, height: Layout.CARD_HEIGHT
         }
         drawRectR(rect)
@@ -761,7 +748,7 @@ function drawSiteCards() {
 function drawOpponentMinion(card) {
     if (gameState.opponent.minions[card.uuid]) {
         drawCardWithPreview(card, 'red');
-        drawOpponentActionPanel(gameState.opponent.minions[card.uuid]);
+        drawOpponentHealth(gameState.opponent.minions[card.uuid]);
     }
 }
 
@@ -780,8 +767,8 @@ function drawOpponentDiscardPile() {
     if (numCardsInDiscard > 0) {
         // draw rotated.
         let card = gameState.cardsInOpponentsDiscard[numCardsInDiscard - 1]
-        card.x = opponentDiscardPile.x;
-        card.y = opponentDiscardPile.y;
+        card.x = Layout.opponentDiscardPile.x;
+        card.y = Layout.opponentDiscardPile.y;
         drawCardWithPreview(card);
     }
 }
@@ -791,8 +778,8 @@ function drawOpponentDeck() {
     if (numCardsInDrawDeck > 0) {
         for (let i = 0; i < numCardsInDrawDeck; i++) {
             // draw a square decreasing draw deck.
-            gameState.cardsInOpponentDrawDeck[i].y = opponentDeck.y;
-            gameState.cardsInOpponentDrawDeck[i].x = opponentDeck.x + Layout.DRAW_DECK_SHIFT * Math.floor(Math.sqrt(i));
+            gameState.cardsInOpponentDrawDeck[i].y =  Layout.opponentDeck.y;
+            gameState.cardsInOpponentDrawDeck[i].x =  Layout.opponentDeck.x + Layout.DRAW_DECK_SHIFT * Math.floor(Math.sqrt(i));
             drawCardReverse(gameState.cardsInOpponentDrawDeck[i])
         }
     }
@@ -801,8 +788,8 @@ function drawOpponentDeck() {
 function drawOpponentHand() {
     let i = 0;
     gameState.cardsInOpponentsHand.forEach(card => {
-        card.x = opponentHand.x + Layout.PLAYER_HAND_OFFSET * i;
-        card.y = opponentHand.y;
+        card.x = Layout.opponentHand.x + Layout.PLAYER_HAND_OFFSET * i;
+        card.y = Layout.opponentHand.y;
         i++;
         drawCardReverse(card);
     })
@@ -837,14 +824,15 @@ function drawOpponentCompanionSlot(slot, origin, slotNum) {
             card.x = origin.x + j * (Layout.COMPANION_POSSESIONS_OFFSET);
             card.y = origin.y;
             drawCardWithPreview(card);
-            drawOpponentActionPanel(gameState.opponent.companions[card.uuid])
+            drawOpponentHealth(gameState.opponent.companions[card.uuid])
         }
     }
 }
 
 function drawOpponentCompanionCards() {
     for (let i = 0; i < MAX_NUMBER_COMPANIONS; i++) {
-        let offset = { x: opponentCompanionZone.x + i * (Layout.CARD_WIDTH + 2 * Layout.Margin), y: opponentCompanionZone.y }
+        let offset = { x: Layout.opponentCompanionZone.x + i * (Layout.CARD_WIDTH + 2 * Layout.Margin),
+            y: Layout.opponentCompanionZone.y }
         drawOpponentCompanionSlot(gameState.cardsInOpponentCompanionSlots[i], offset, i);
     }
 
@@ -853,8 +841,8 @@ function drawOpponentCompanionCards() {
 function drawOpponentSupportCards() {
     let i = 0;
     gameState.cardsInOpponentSupportArea.forEach(card => {
-        card.x = opponentSupportZone.x + Layout.PLAYER_HAND_OFFSET * i;
-        card.y = opponentSupportZone.y;
+        card.x = Layout.opponentSupportZone.x + Layout.PLAYER_HAND_OFFSET * i;
+        card.y = Layout.opponentSupportZone.y;
         i++;
         drawCardWithPreview(card);
     });
@@ -863,7 +851,7 @@ function drawOpponentSupportCards() {
 function drawOpponentCompanionZones() {
     for (let i = 0; i < MAX_NUMBER_COMPANIONS; i++) {
         const rect = {
-            x: opponentCompanionZone.x + i * (Layout.CARD_WIDTH + 2 * Layout.Margin), y: opponentCompanionZone.y,
+            x: Layout.opponentCompanionZone.x + i * (Layout.CARD_WIDTH + 2 * Layout.Margin), y: Layout.opponentCompanionZone.y,
             width: Layout.CARD_WIDTH, height: Layout.CARD_HEIGHT
         }
         drawRectR(rect)
@@ -899,22 +887,22 @@ function drawCompanionPreview() {
 
 
 function drawOpponentArea() {
-    drawRectR(opponentDeadPile, "Dead Pile")
-    drawRectR(opponentDiscardPile, "Discard Pile")
-    drawRectR(opponentHand, "Hand")
-    drawRectR(opponentDeck, "Deck")
-    drawRectR(opponentSupportZone, "Support")
-    drawOpponentCompanionZones(opponentCompanionZone, "Companion");
+    drawRectR(Layout.opponentDeadPile, "Dead Pile")
+    drawRectR(Layout.opponentDiscardPile, "Discard Pile")
+    drawRectR(Layout.opponentHand, "Hand")
+    drawRectR(Layout.opponentDeck, "Deck")
+    drawRectR(Layout.opponentSupportZone, "Support")
+    drawOpponentCompanionZones();
 }
 
 
 function drawStaticSnapZones() {
     drawSiteBorders();
-    drawRectR(supportZone, "Support")
-    drawRectR(playerHand, "Hand");
-    drawRectR(discardPile, "Discard");
-    drawRectR(drawDeck, "Deck empty");
-    drawRectR(deadPile, "Deadpile");
+    drawRectR(Layout.supportZone, "Support")
+    drawRectR(Layout.playerHand, "Hand");
+    drawRectR(Layout.discardPile, "Discard");
+    drawRectR(Layout.drawDeck, "Deck empty");
+    drawRectR(Layout.deadPile, "Deadpile");
     drawCompanionZones();
 }
 
@@ -1205,8 +1193,8 @@ function placeCardInHand(from, card) {
     // Reshuffle/organize playerhand
     for (let i = numCardsInHand; i >= 0; i--) {
         let card = gameState.cardsInPlayerHand[i];
-        card.x = playerHand.x + i * Layout.PLAYER_HAND_OFFSET;
-        card.y = playerHand.y;
+        card.x = Layout.playerHand.x + i * Layout.PLAYER_HAND_OFFSET;
+        card.y = Layout.playerHand.y;
     }
     sendCardMovedEvent(from, CARD_EVENT_LOCATION_PLAYER_HAND, card);
     return true;
@@ -1252,8 +1240,8 @@ function placeCardInDiscard(from, card) {
 
     gameState.cardsInPlayerDiscard.push(card)
 
-    card.x = discardPile.x;
-    card.y = discardPile.y;
+    card.x = Layout.discardPile.x;
+    card.y = Layout.discardPile.y;
 
     sendCardMovedEvent(from, CARD_EVENT_LOCATION_DISCARD, card);
 
@@ -1273,8 +1261,8 @@ function placeCardInDeadPile(from, card) {
 
     gameState.cardsInPlayerDeadPile.push(card)
 
-    card.x = deadPile.x
-    card.y = deadPile.y
+    card.x = Layout.deadPile.x
+    card.y = Layout.deadPile.y
 
     sendCardMovedEvent(from, CARD_EVENT_LOCATION_DEAD_PILE, card);
 
@@ -1286,13 +1274,13 @@ function placeCardInDeadPile(from, card) {
 function placeCardAtSite(from, card, siteNum) {
     console.log("Adding card to site :%d", (siteNum + 1))
 
-    if (siteNum < siteSlots.length) {
+    if (siteNum < Layout.siteSlots.length) {
         if (gameState.cardsInSiteSlots[siteNum] || gameState.cardsInOpponentSite[siteNum]) {
             console.log("Card already exists at site: %d", siteNum + 1)
         } else {
             gameState.cardsInSiteSlots[siteNum] = card;
-            card.x = siteSlots[siteNum].x
-            card.y = siteSlots[siteNum].y
+            card.x = Layout.siteSlots[siteNum].x
+            card.y = Layout.siteSlots[siteNum].y
             sendCardMovedEvent(from, "site", card, siteNum)
             return true;
         }
@@ -1301,8 +1289,8 @@ function placeCardAtSite(from, card, siteNum) {
 }
 
 function handleSitePlacement(from, card) {
-    for (let i = 0; i < siteSlots.length; i++) {
-        let site = siteSlots[i]
+    for (let i = 0; i < Layout.siteSlots.length; i++) {
+        let site = Layout.siteSlots[i]
         if (mouseInArea(site)) {
             return placeCardAtSite(from, card, i);
         }
@@ -1320,8 +1308,8 @@ function placeCardInSupportPile(from, card) {
     // Reshuffle/organize playerhand
     for (let i = numCardsInPile; i >= 0; i--) {
         let card = gameState.cardsInSupportArea[i];
-        card.x = supportZone.x + i * Layout.PLAYER_HAND_OFFSET;
-        card.y = supportZone.y;
+        card.x = Layout.supportZone.x + i * Layout.PLAYER_HAND_OFFSET;
+        card.y = Layout.supportZone.y;
     }
 
     sendCardMovedEvent(from, CARD_EVENT_LOCATION_SUPPORT_AREA, card);
@@ -1333,14 +1321,14 @@ function cardIsCompanionType(card) {
 }
 
 function restackCompanionSlot(slotNum) {
-    const slotOrigin = { x: companionZone.x + slotNum * (Layout.CARD_WIDTH + 2 * Layout.Margin), y: companionZone.y }
-    const companionSlot = gameState.companionSlots[slotNum];
+    const slotOrigin = { x: Layout.companionZone.x + slotNum * (Layout.CARD_WIDTH + 2 * Layout.Margin), y: Layout.companionZone.y }
+    const companionSlot = gameState.cardsInCompanionSlots[slotNum];
     const numCardsInSlot = companionSlot.length;
     let offset = 0;
     let i = 0;
 
-    for (i = 0; i < gameState.companionSlots[slotNum].length; i++) {
-        let card = gameState.companionSlots[slotNum][i];
+    for (i = 0; i < gameState.cardsInCompanionSlots[slotNum].length; i++) {
+        let card = gameState.cardsInCompanionSlots[slotNum][i];
         if (cardIsCompanionType(card)) {
             // update buttons while we are here.
             let actionPanel = gameState.player.companions[card.uuid].actionPanel;
@@ -1359,7 +1347,7 @@ function restackCompanionSlot(slotNum) {
     }
     // resize positions.
 
-    gameState.companionSlots[slotNum].forEach(card => {
+    gameState.cardsInCompanionSlots[slotNum].forEach(card => {
         // Draw stack of possesions/support/etc first
         card.x = slotOrigin.x + offset * Layout.COMPANION_POSSESIONS_OFFSET;
         card.y = slotOrigin.y;
@@ -1433,7 +1421,7 @@ function slotHasCompanion(slot) {
     return false;
 }
 function placeCardInCompanionSlot(from, card, slotNum) {
-    let companionSlot = gameState.companionSlots[slotNum];
+    let companionSlot = gameState.cardsInCompanionSlots[slotNum];
     let companionSlotOccupied = slotHasCompanion(companionSlot);
     let cardIsCompanion = cardIsCompanionType(card);
 
@@ -1464,8 +1452,8 @@ function placeCardInCompanionSlot(from, card, slotNum) {
 }
 
 function placeCardInCompanionPile(from, card) {
-    let offset = uiState.mouseX - companionZone.x;
-    let slotNum = Math.floor(offset / (companionZone.width / MAX_NUMBER_COMPANIONS));
+    let offset = uiState.mouseX - Layout.companionZone.x;
+    let slotNum = Math.floor(offset / (Layout.companionZone.width / MAX_NUMBER_COMPANIONS));
 
     return placeCardInCompanionSlot(from, card, slotNum);
 }
@@ -1474,7 +1462,7 @@ function placeCardInFreeCompanionSlot(from, card) {
     let i = 0;
     console.log("Placing card in a companion slot");
     for (i = 0; i < MAX_NUMBER_COMPANIONS; i++) {
-        if (gameState.companionSlots[i].length == 0) {
+        if (gameState.cardsInCompanionSlots[i].length == 0) {
             console.log("Found empty slot at %d", i);
             return placeCardInCompanionSlot(from, card, i);
         }
@@ -1499,11 +1487,11 @@ function playSiteFromDeck(siteNum) {
 // Card moved from origin, figure out where it went.
 function handleGenericCardMoved(from, selectedCard) {
     const dropZones = [
-        { toArea: playerHand, action: placeCardInHand },
-        { toArea: discardPile, action: placeCardInDiscard },
-        { toArea: companionZone, action: placeCardInCompanionPile },
-        { toArea: supportZone, action: placeCardInSupportPile },
-        { toArea: deadPile, action: placeCardInDeadPile },
+        { toArea: Layout.playerHand, action: placeCardInHand },
+        { toArea: Layout.discardPile, action: placeCardInDiscard },
+        { toArea: Layout.companionZone, action: placeCardInCompanionPile },
+        { toArea: Layout.supportZone, action: placeCardInSupportPile },
+        { toArea: Layout.deadPile, action: placeCardInDeadPile },
     ]
 
     for (const zone of dropZones) {
@@ -1636,8 +1624,8 @@ function handleCompanionPreviewTapped() {
 
 
 function handleSiteSlotTapped() {
-    for (let i = 0; i < siteSlots.length; i++) {
-        if (isMouseOverCard(siteSlots[i])) {
+    for (let i = 0; i < Layout.siteSlots.length; i++) {
+        if (isMouseOverCard(Layout.siteSlots[i])) {
             return playSiteFromDeck(i + 1);
         }
     }
@@ -1646,7 +1634,7 @@ function handleSiteSlotTapped() {
 
 function handleCompanionCardsReleased(tapped) {
     let i = 0;
-    gameState.companionSlots.forEach(slot => {
+    gameState.cardsInCompanionSlots.forEach(slot => {
         checkCardReleased(("playerCompanion" + i), slot);
         i++;
     });
@@ -1753,7 +1741,7 @@ canvas.addEventListener('mousedown', (e) => {
         { cards: gameState.cardsInPlayerDeadPile, vertical: false }
     ]
     // Check companion cards + possesions
-    gameState.companionSlots.forEach(slot => { cardPiles.push({ cards: slot, vertical: true }); });
+    gameState.cardsInCompanionSlots.forEach(slot => { cardPiles.push({ cards: slot, vertical: true }); });
 
     // Check every pile of playerCards to see if a card was selected.
     let k = 0;
@@ -2039,7 +2027,7 @@ function handleRemotePlayerSupportArea(eventData) {
 function handleRemotePlayerSite(eventData) {
     const siteNumIdx = eventData.index;
 
-    if (siteNumIdx < 0 || siteNumIdx >= siteSlots.length) {
+    if (siteNumIdx < 0 || siteNumIdx >= Layout.siteSlots.length) {
         console.error("invalid site Number")
         return;
     }
@@ -2054,14 +2042,14 @@ function handleRemotePlayerSite(eventData) {
     let existingCard = findCardFromExistingPile(eventData);
     if (existingCard) {
         console.log("Moving existing  card(%d)", existingCard.uuid)
-        existingCard.x = siteSlots[siteNumIdx].x
-        existingCard.y = siteSlots[siteNumIdx].y
+        existingCard.x = Layout.siteSlots[siteNumIdx].x
+        existingCard.y = Layout.siteSlots[siteNumIdx].y
         gameState.cardsInOpponentSite[siteNumIdx] = existingCard;
     } else {
         let card = initCard(eventData.cardId);
         card.uuid = eventData.cardUuid; // override uuid generated ref.
-        card.x = siteSlots[siteNumIdx].x;
-        card.y = siteSlots[siteNumIdx].y
+        card.x = Layout.siteSlots[siteNumIdx].x;
+        card.y = Layout.siteSlots[siteNumIdx].y
         gameState.cardsInOpponentSite[siteNumIdx] = card;
     }
 }
@@ -2070,8 +2058,8 @@ function moveStackToDrawDeck(stack) {
     while (stack.length > 0) {
         let card = stack.pop();
         if (card) {
-            card.x = drawDeck.x;
-            card.y = drawDeck.y;
+            card.x = Layout.drawDeck.x;
+            card.y = Layout.drawDeck.y;
             gameState.cardsInDrawDeck.push(card);
         }
     }
@@ -2082,7 +2070,7 @@ function handleGatherAndShuffleCards() {
     moveStackToDrawDeck(gameState.cardsInPlayerDiscard)
     moveStackToDrawDeck(gameState.cardsInPlayerDeadPile)
     moveStackToDrawDeck(gameState.cardsInSupportArea);
-    gameState.companionSlots.forEach(slotPile => { moveStackToDrawDeck(slotPile) });
+    gameState.cardsInCompanionSlots.forEach(slotPile => { moveStackToDrawDeck(slotPile) });
     moveStackToDrawDeck(gameState.cardsInSiteSlots);
 }
 
@@ -2163,8 +2151,8 @@ function toggleCompanionPreview() {
 
 function resetDiscardPreview() {
     gameState.cardsInPlayerDiscard.forEach(card => {
-        card.x = discardPile.x;
-        card.y = discardPile.y;
+        card.x = Layout.discardPile.x;
+        card.y = Layout.discardPile.y;
     });
 }
 

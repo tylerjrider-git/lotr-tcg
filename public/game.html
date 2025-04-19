@@ -151,7 +151,7 @@
 
         // Events from the client game.
         document.addEventListener('cardEvent', (msg) => {
-            console.log("Got a card event info: %s", JSON.stringify(msg.detail, 2, null))
+            // console.log("Got a card event info: %s", JSON.stringify(msg.detail, 2, null))
             socket.emit('cardEvent', msg.detail)
         })
 
@@ -162,5 +162,4 @@
     </script>
 
 </body>
-
 </html>
