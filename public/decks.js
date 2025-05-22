@@ -6,6 +6,8 @@ function deckName2Csv(deckName) {
             return "Fellowship_Aragorn_Starter.csv"
         case "Gandalf":
             return "Fellowship_Gandalf_Starter.csv"
+        case "Gimli":
+            return "Fellowship_Moria_Gimli_Starter.csv"
         default:
             console.error("Deck does not exist");
             break;
